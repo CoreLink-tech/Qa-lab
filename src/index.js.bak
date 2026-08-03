@@ -1,0 +1,169 @@
+const { exportJSON } = require("./exporter");
+const { scanWebsite } = require("./scanner");
+const { crawlWebsite } = require("./crawler");
+const { scanPage } = require("./pageScanner");
+const { normalizePage } = require("./normalizer");
+const generateReport = require("./report");
+const { runRules } = require("./ruleEngine");
+const { calculateScore } = require("./scoring");
+const { generateRecommendations } = require("./recommendations");
+
+
+async function main() {
+
+    const url = process.argv[2];
+
+    if (!url) {
+        console.log("Usage: node src/index.js <website>");
+        process.exit(1);
+    }
+
+
+    // Scan homepage
+    const websiteResult = await scanWebsite(url);
+
+
+    // Discover links
+    const links = await crawlWebsite(url);
+
+
+    console.log("\n========== DISCOVERED LINKS ==========\n");
+
+    links.forEach((link, index) => {
+        console.log(`${index + 1}. ${link}`);
+    });
+
+
+
+    console.log("\n========== PAGE TEST RESULTS ==========\n");
+
+
+    const pages = [];
+
+
+    for (const link of links) {
+
+        const page = await scanPage(url, link);
+
+
+        const normalizedPage = normalizePage(
+            page,
+            page.html || ""
+        );
+
+
+        pages.push(normalizedPage);
+
+
+        console.log("--------------------------------------");
+        console.log(`Page : ${normalizedPage.url}`);
+        console.log(`Status : ${normalizedPage.status}`);
+        console.log(`Response Time : ${normalizedPage.responseTime} ms`);
+        console.log(`Title : ${normalizedPage.title}`);
+
+    }
+
+
+
+    // Website Data Model
+
+    const websiteModel = {
+
+        url,
+
+        pages,
+
+        totalPages: pages.length,
+
+        timestamp: new Date().toISOString(),
+
+        findings: [],
+
+        recommendations: [],
+
+        score: 0,
+
+
+        summary: {
+
+            pagesScanned: pages.length,
+
+            issuesFound: 0,
+
+
+            severity: {
+
+                critical: 0,
+
+                high: 0,
+
+                medium: 0,
+
+                low: 0
+
+            }
+
+        }
+
+    };
+
+
+
+    console.log("Running QA Rules...");
+
+
+    const issues = await runRules(websiteModel);
+
+
+
+    console.log("Generating Recommendations...");
+
+
+    const recommendations = generateRecommendations(issues);
+
+
+
+    console.log("Calculating Score...");
+
+
+    const score = calculateScore(issues);
+
+
+
+    websiteResult.score = score;
+
+    websiteResult.pagesScanned = pages.length;
+
+
+    websiteModel.score = score;
+
+    websiteModel.findings = issues;
+
+    websiteModel.recommendations = recommendations;
+
+    websiteModel.summary.issuesFound = issues.length;
+
+
+
+    // Generate HTML + JSON Report
+
+    generateReport(websiteModel);
+
+
+
+    // Export final JSON model
+
+    exportJSON(websiteModel);
+
+
+
+    console.log("\n========== QA COMPLETE ==========");
+    console.log(`Score: ${score.score}/100`);
+console.log(`Grade: ${score.grade}`);
+    console.log(`Pages Scanned: ${pages.length}`);
+    console.log(`Issues Found: ${issues.length}`);
+
+}
+
+
+main();
