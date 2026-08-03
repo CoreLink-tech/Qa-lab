@@ -1,5 +1,21 @@
 # QA-Lab
 
+QA-Lab is an open-source website quality analysis engine that helps developers identify performance, SEO, accessibility, security, and usability issues through automated scanning and professional reporting.
+
+## Features
+
+- Website crawling
+- Multi-page scanning
+- Performance analysis
+- SEO checks
+- Accessibility checks
+- Form validation
+- Security checks
+- Link validation
+- HTML report generation
+- JSON report generation
+- Quality scoring# QA-Lab
+
 A lightweight command-line Quality Assurance (QA) tool for automatically scanning websites and generating actionable reports.
 
 QA-Lab crawls websites, analyzes pages, applies QA rules, calculates an overall quality score, and generates both HTML and JSON reports.
@@ -31,6 +47,11 @@ Clone the repository:
 
 ```bash
 git clone https://github.com/CoreLink-tech/Qa-lab.git
+```
+
+Go into the project directory:
+
+```bash
 cd Qa-lab
 ```
 
@@ -39,7 +60,6 @@ Install dependencies:
 ```bash
 npm install
 ```
-
 ---
 
 ## Usage
@@ -50,19 +70,18 @@ Scan a website:
 node src/index.js https://example.com
 ```
 
-Show all issues:
+View all detected issues:
 
 ```bash
 node src/index.js https://example.com --issues
 ```
 
-Show help:
+Display the help menu:
 
 ```bash
 node src/index.js --help
 ```
 
----
 
 ## Example Output
 
@@ -104,46 +123,50 @@ reports/
 ## Current QA Checks
 
 ### Performance
-
 - Slow page detection
+- Response time measurement
 
 ### SEO
-
-- Missing H1
+- Missing H1 detection
 - Multiple H1 detection
 
 ### Accessibility
-
 - Missing image alt attributes
 
 ### Forms
-
-- Missing name attributes
-- Password autocomplete validation
-
-### Security
-
-- Security header checks
+- Missing input name attributes
+- Missing password autocomplete attributes
 
 ### Links
-
 - Broken link detection
 
+### Security
+- Security header analysis
 ---
 
 ## Roadmap
 
-- Better scoring algorithm
-- Duplicate issue grouping
-- PDF reports
-- CSV export
-- Screenshot capture
-- Lighthouse integration
-- API testing
-- Authentication testing
-- Visual regression testing
-- CI/CD integration
+### Version 1.1
+- Improved scoring algorithm
+- Better issue severity classification
+- Issue confidence levels
+- Duplicate issue detection
+- Summary-only CLI mode
 
+### Version 1.2
+- Lighthouse-style performance metrics
+- Mobile responsiveness checks
+- Metadata analysis
+- Sitemap validation
+- robots.txt validation
+
+### Version 2.0
+- PDF report generation
+- Screenshot capture
+- AI-powered recommendations
+- Historical scan comparison
+- CI/CD integration
+- REST API
 ---
 
 ## Tech Stack
@@ -153,14 +176,23 @@ reports/
 - Cheerio
 - Axios
 
----
+## Contributing
+
+Contributions are welcome. If you have ideas for improvements or discover bugs, feel free to open an issue or submit a pull request.
 
 ## License
 
-MIT
+This project is licensed under the MIT License.
+
+## Support
+
+If you find QA-Lab useful:
+
+- ⭐ Star this repository
+- 🐞 Report bugs through GitHub Issues
+- 💡 Suggest new features
+- 🍴 Fork the project and contribute
 
 ---
 
-## Author
-
-Developed by **CoreLink Technologies**# Qa-lab
+Built with ❤️ by **CoreLink Technologies**
