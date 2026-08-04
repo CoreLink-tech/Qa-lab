@@ -21,7 +21,7 @@ function printSummary(websiteModel) {
         counts[issue.severity]++;
     }
 
-    categories[issue.type] = (categories[issue.type] || 0) + 1;
+    categories[issue.category] = (categories[issue.category] || 0) + 1;
 
 });
 
@@ -54,7 +54,7 @@ function printIssues(websiteModel) {
     }
 
     websiteModel.findings.forEach((issue, index) => {
-        console.log(`${index + 1}. ${issue.type}`);
+        console.log(`${index + 1}. ${issue.title}`);
         console.log(`   Severity : ${issue.severity}`);
         console.log(`   Page     : ${issue.page}`);
         console.log(`   Details  : ${issue.details}`);

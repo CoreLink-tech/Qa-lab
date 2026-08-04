@@ -1,8 +1,8 @@
-const fs = require("fs");
-const path = require("path");
-
-function exportJSON(websiteModel) {
-
+// Single source of truth for "what does a report look like", consumed by
+// both the JSON writer and the HTML renderer, so they can't drift apart
+// the way report.js and exporter.js previously did (two different shapes,
+// both writing reports/report.json, silently overwriting each other).
+function buildReportData(websiteModel) {
     const pages = websiteModel.pages.map(page => ({
         url: page.url,
         status: page.status,
@@ -15,7 +15,8 @@ function exportJSON(websiteModel) {
         headers: page.headers
     }));
 
-    const report = {
+    return {
+        schemaVersion: websiteModel.schemaVersion,
         url: websiteModel.url,
         timestamp: websiteModel.timestamp,
         score: websiteModel.score,
@@ -24,23 +25,6 @@ function exportJSON(websiteModel) {
         recommendations: websiteModel.recommendations,
         pages
     };
-
-    const reportDir = path.join(__dirname, "..", "reports");
-
-    if (!fs.existsSync(reportDir)) {
-        fs.mkdirSync(reportDir, { recursive: true });
-    }
-
-    const reportPath = path.join(reportDir, "report.json");
-
-    fs.writeFileSync(
-        reportPath,
-        JSON.stringify(report, null, 4)
-    );
-
-    console.log(`\nJSON report saved to: ${reportPath}`);
 }
 
-module.exports = {
-    exportJSON
-};
+module.exports = { buildReportData };
