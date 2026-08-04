@@ -1,4 +1,4 @@
-onst createFinding = require("../core/finding");
+const createFinding = require("../core/finding");
 const Severity = require("../constants/severity");
 const Category = require("../constants/categories");
 

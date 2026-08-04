@@ -1,48 +1,28 @@
-const { checkSlowPages } = require("./rules/performanceRules");
-const { checkSecurityHeaders } = require("./rules/securityRules");
-const { checkHeadings } = require("./rules/seoRules");
-const { checkImages } = require("./rules/accessibilityRules");
-const { checkBrokenLinks } = require("./rules/linkRules");
-const { checkForms } = require("./rules/formRules");
+const { loadRules } = require("./core/ruleRegistry");
 
-async function runRules(websiteModel) {
+async function runRules(websiteModel, rules = loadRules()) {
 
     let issues = [];
 
-    console.log("Running Performance...");
-    const performanceIssues = checkSlowPages(websiteModel);
-    if (performanceIssues.length) {
-        issues.push(...performanceIssues);
-    }
+    for (const rule of rules) {
 
-    console.log("Running Security...");
-    const securityIssues = checkSecurityHeaders(websiteModel);
-    if (securityIssues.length) {
-        issues.push(...securityIssues);
-    }
+        console.log(`Running ${rule.name}...`);
 
-    console.log("Running SEO...");
-    const seoIssues = checkHeadings(websiteModel);
-    if (seoIssues.length) {
-        issues.push(...seoIssues);
-    }
+        try {
+            // await works whether run() is sync or async, so rules
+            // that need to do their own network calls (e.g. link
+            // checking) don't need special-casing here.
+            const findings = await rule.run(websiteModel);
 
-    console.log("Running Accessibility...");
-    const accessibilityIssues = checkImages(websiteModel);
-    if (accessibilityIssues.length) {
-        issues.push(...accessibilityIssues);
-    }
+            if (findings && findings.length) {
+                issues.push(...findings);
+            }
 
-    console.log("Running Links...");
-    const linkIssues = await checkBrokenLinks(websiteModel);
-    if (linkIssues.length) {
-        issues.push(...linkIssues);
-    }
-
-    console.log("Running Forms...");
-    const formIssues = checkForms(websiteModel);
-    if (formIssues.length) {
-        issues.push(...formIssues);
+        } catch (error) {
+            console.error(
+                `Rule "${rule.id}" (${rule.name}) threw an error and was skipped: ${error.message}`
+            );
+        }
     }
 
     console.log("Finished rules.");
@@ -53,4 +33,3 @@ async function runRules(websiteModel) {
 module.exports = {
     runRules
 };
-
