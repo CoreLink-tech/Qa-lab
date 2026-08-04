@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 const { printSummary, printIssues } = require("./terminalReport");
 const { exportJSON } = require("./exporter");
 const { scanWebsite } = require("./scanner");

@@ -1,18 +1,36 @@
 {
   "name": "qa-lab",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "description": "QA-Lab is a website quality assurance scanner that analyzes performance, SEO, accessibility, security, forms, links, and generates HTML and JSON reports.",
+  "main": "src/index.js",
+  "bin": {
+    "qalab": "./src/index.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "echo \"No tests configured yet\" && exit 0"
+  },
+  "keywords": [
+    "qa",
+    "quality-assurance",
+    "website",
+    "scanner",
+    "seo",
+    "accessibility",
+    "security",
+    "performance",
+    "cli",
+    "audit"
+  ],
+  "author": "CoreLink-tech",
+  "license": "MIT",
   "type": "commonjs",
   "dependencies": {
     "axios": "^1.19.0",
     "cheerio": "^1.2.0",
     "playwright": "^1.62.1"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }

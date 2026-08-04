@@ -1,37 +1,63 @@
-function checkSlowPages(websiteModel) {
-    const findings = [];
-
-    websiteModel.pages.forEach(page => {
-
-        if (page.responseTime > 5000) {
-
-            findings.push({
-                type: "Performance",
-                title: "Very slow page response",
-                severity: "High",
-                page: page.url,
-                details: `Page response time is ${page.responseTime} ms.`,
-                recommendation: "Reduce server response time to under 2 seconds."
-            });
-
-        } else if (page.responseTime > 2000) {
-
-            findings.push({
-                type: "Performance",
-                title: "Slow page response",
-                severity: "Medium",
-                page: page.url,
-                details: `Page response time is ${page.responseTime} ms.`,
-                recommendation: "Optimize backend processing, caching, and database queries."
-            });
-
-        }
-
-    });
-
-    return findings;
-}
+onst createFinding = require("../core/finding");
+const Severity = require("../constants/severity");
+const Category = require("../constants/categories");
 
 module.exports = {
-    checkSlowPages
+    id: "PERFORMANCE",
+    name: "Performance Rules",
+    category: Category.PERFORMANCE,
+    description: "Checks page response times and identifies slow-loading pages.",
+    enabled: true,
+
+    run(websiteModel) {
+
+        const findings = [];
+
+        for (const page of websiteModel.pages) {
+
+            const responseTime = page.responseTime;
+
+            if (typeof responseTime !== "number") {
+                continue;
+            }
+
+            if (responseTime > 5000) {
+
+                findings.push(
+                    createFinding({
+                        id: "PERF001",
+                        title: "Very Slow Page Response",
+                        category: Category.PERFORMANCE,
+                        severity: Severity.HIGH,
+                        page: page.url,
+                        details: `Page response time is ${responseTime} ms.`,
+                        recommendation:
+                            "Reduce server response time to under 2 seconds by optimizing backend processing, database queries, caching, and infrastructure.",
+                        documentation:
+                            "https://developer.mozilla.org/en-US/docs/Web/Performance"
+                    })
+                );
+
+            } else if (responseTime > 2000) {
+
+                findings.push(
+                    createFinding({
+                        id: "PERF002",
+                        title: "Slow Page Response",
+                        category: Category.PERFORMANCE,
+                        severity: Severity.MEDIUM,
+                        page: page.url,
+                        details: `Page response time is ${responseTime} ms.`,
+                        recommendation:
+                            "Optimize backend processing, caching, and database queries to improve response time.",
+                        documentation:
+                            "https://developer.mozilla.org/en-US/docs/Web/Performance"
+                    })
+                );
+
+            }
+        }
+
+        return findings;
+    }
 };
