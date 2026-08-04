@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 const { printSummary, printIssues } = require("./terminalReport");
-const { exportJSON } = require("./exporter");
+const { createWebsiteModel } = require("./models/websiteModel");
 const { scanWebsite } = require("./scanner");
 const { crawlWebsite } = require("./crawler");
 const { scanPage } = require("./pageScanner");
@@ -93,45 +93,11 @@ if (options.verbose) {
 
     // Website Data Model
 
-    const websiteModel = {
+    const websiteModel = createWebsiteModel(url);
 
-        url,
-
-        pages,
-
-        totalPages: pages.length,
-
-        timestamp: new Date().toISOString(),
-
-        findings: [],
-
-        recommendations: [],
-
-        score: 0,
-
-
-        summary: {
-
-            pagesScanned: pages.length,
-
-            issuesFound: 0,
-
-
-            severity: {
-
-                critical: 0,
-
-                high: 0,
-
-                medium: 0,
-
-                low: 0
-
-            }
-
-        }
-
-    };
+    websiteModel.pages = pages;
+    websiteModel.totalPages = pages.length;
+    websiteModel.summary.pagesScanned = pages.length;
 
 
 
@@ -174,12 +140,6 @@ if (options.verbose) {
     // Generate HTML + JSON Report
 
     generateReport(websiteModel);
-
-
-
-    // Export final JSON model
-
-    exportJSON(websiteModel);
 
 
 

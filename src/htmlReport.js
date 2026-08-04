@@ -14,7 +14,7 @@ function generateHTMLReport(data) {
 
     const rows = findings.map(issue => `
 <tr>
-<td>${issue.type || "-"}</td>
+<td>${issue.title || "-"}</td>
 <td>${issue.severity || "-"}</td>
 <td>${issue.page || "-"}</td>
 <td>${issue.details || "-"}</td>

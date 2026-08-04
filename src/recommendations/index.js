@@ -1,90 +1,25 @@
+const Severity = require("../constants/severity");
+
+// Findings already carry a severity constant (Critical/High/Medium/Low/Info).
+// Map that straight to a recommendation priority instead of re-deriving it.
+const PRIORITY_BY_SEVERITY = {
+    [Severity.CRITICAL]: "Critical",
+    [Severity.HIGH]: "High",
+    [Severity.MEDIUM]: "Medium",
+    [Severity.LOW]: "Low",
+    [Severity.INFO]: "Low"
+};
+
 function generateRecommendations(findings) {
-
-    const recommendations = [];
-
-    findings.forEach(issue => {
-
-        switch (issue.type) {
-
-            case "Security Header":
-
-                if (issue.details.includes("Content-Security-Policy")) {
-                    recommendations.push({
-                        priority: "High",
-                        category: "Security",
-                        issue: issue.details,
-                        fix: "Add a Content-Security-Policy HTTP header to reduce XSS and code injection risks."
-                    });
-                }
-
-                if (issue.details.includes("X-Frame-Options")) {
-                    recommendations.push({
-                        priority: "Medium",
-                        category: "Security",
-                        issue: issue.details,
-                        fix: "Add the X-Frame-Options header to protect against clickjacking attacks."
-                    });
-                }
-
-                if (issue.details.includes("X-Content-Type-Options")) {
-                    recommendations.push({
-                        priority: "Low",
-                        category: "Security",
-                        issue: issue.details,
-                        fix: "Add the X-Content-Type-Options: nosniff header to stop MIME type sniffing."
-                    });
-                }
-
-                break;
-
-            case "SEO":
-
-                recommendations.push({
-                    priority: "Medium",
-                    category: "SEO",
-                    issue: issue.details,
-                    fix: "Ensure every page contains one descriptive H1 heading."
-                });
-
-                break;
-
-            case "Performance":
-
-                recommendations.push({
-                    priority: "High",
-                    category: "Performance",
-                    issue: issue.details,
-                    fix: "Reduce server response time, compress assets, and enable caching."
-                });
-
-                break;
-
-            case "Accessibility":
-
-                recommendations.push({
-                    priority: "Low",
-                    category: "Accessibility",
-                    issue: issue.details,
-                    fix: "Add meaningful alt attributes to all images."
-                });
-
-                break;
-
-            case "Form":
-
-                recommendations.push({
-                    priority: "Low",
-                    category: "Forms",
-                    issue: issue.details,
-                    fix: "Add missing form attributes to improve accessibility and browser support."
-                });
-
-                break;
-        }
-
-    });
-
-    return recommendations;
+    return findings
+        // A finding with no recommendation text has nothing actionable to show.
+        .filter(finding => finding.recommendation)
+        .map(finding => ({
+            priority: PRIORITY_BY_SEVERITY[finding.severity] || "Low",
+            category: finding.category,
+            issue: finding.title,
+            fix: finding.recommendation
+        }));
 }
 
 module.exports = {
