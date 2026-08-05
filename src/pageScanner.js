@@ -1,6 +1,5 @@
-const axios = require("axios");
 const cheerio = require("cheerio");
-
+const { httpClient } = require("./utils/httpClient");
 
 async function scanPage(baseUrl, path) {
 
@@ -10,7 +9,7 @@ async function scanPage(baseUrl, path) {
 
         const start = Date.now();
 
-        const response = await axios.get(url);
+        const response = await httpClient.get(url);
 
         const responseTime = Date.now() - start;
 
