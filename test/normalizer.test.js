@@ -7,9 +7,13 @@ const sampleHtml = `
 <head>
   <title>Sample Page</title>
   <meta name="description" content="A sample description.">
+  <meta name="generator" content="WordPress 6.4">
   <link rel="canonical" href="https://example.com/">
   <meta property="og:title" content="Sample Page">
   <script type="application/ld+json">{}</script>
+  <script src="/wp-content/theme.js"></script>
+  <link rel="stylesheet" href="/main.css">
+  <link rel="stylesheet" href="/main.css">
 </head>
 <body>
   <h1>Main Heading</h1>
@@ -26,6 +30,7 @@ const sampleHtml = `
     <input type="hidden" name="csrf_token" value="abc">
   </form>
   <img src="http://insecure.example.com/x.png">
+  <script>console.log("inline");</script>
 </body>
 </html>
 `;
@@ -98,4 +103,46 @@ test("handles a page with no forms, no headings, and no meta gracefully", () => 
     assert.deepEqual(result.headingSequence, []);
     assert.equal(result.meta.description, null);
     assert.equal(result.lang, null);
+});
+
+test("extracts scripts with src, location, and inline status", () => {
+    const result = normalizePage({ url: "https://example.com/" }, sampleHtml);
+    const external = result.scripts.find(s => s.src === "/wp-content/theme.js");
+    assert.ok(external);
+    assert.equal(external.inline, false);
+    assert.equal(external.location, "head");
+
+    // Two inline scripts exist in the sample (the ld+json block in head,
+    // and the console.log script in body) -- be specific about which
+    // one we're checking rather than relying on find() order.
+    const bodyInline = result.scripts.find(s => s.inline === true && s.location === "body");
+    assert.ok(bodyInline);
+    assert.equal(bodyInline.src, null);
+});
+
+test("extracts stylesheets, including duplicates (dedup is the rule's job, not the model's)", () => {
+    const result = normalizePage({ url: "https://example.com/" }, sampleHtml);
+    const mainCssCount = result.stylesheets.filter(s => s.href === "/main.css").length;
+    assert.equal(mainCssCount, 2);
+});
+
+test("parses cookies from the page's Set-Cookie header into model.cookies", () => {
+    const result = normalizePage(
+        { url: "https://example.com/", headers: { "set-cookie": "session=abc; Secure; HttpOnly" } },
+        sampleHtml
+    );
+    assert.equal(result.cookies.length, 1);
+    assert.equal(result.cookies[0].name, "session");
+    assert.equal(result.cookies[0].secure, true);
+});
+
+test("detects technologies from generator meta tag and resource paths", () => {
+    const result = normalizePage({ url: "https://example.com/" }, sampleHtml);
+    const names = result.technologies.map(t => t.name);
+    assert.ok(names.includes("WordPress"));
+});
+
+test("technologies is an empty array, not an error, when nothing matches", () => {
+    const result = normalizePage({ url: "https://example.com/plain" }, "<html><body>plain page</body></html>");
+    assert.deepEqual(result.technologies, []);
 });

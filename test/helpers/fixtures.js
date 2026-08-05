@@ -31,7 +31,11 @@ function makePage(overrides = {}) {
         lang: "en",
         labelFors: [],
         mixedContentCount: 0,
-        htmlSize: 1000
+        htmlSize: 1000,
+        scripts: [],
+        stylesheets: [],
+        cookies: [],
+        technologies: []
     };
 
     return {

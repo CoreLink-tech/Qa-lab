@@ -4,12 +4,6 @@ const Category = require("../constants/categories");
 
 const SERVER_VERSION_PATTERN = /\/?\d+\.\d+/;
 
-function getCookies(headers) {
-    const raw = headers["set-cookie"];
-    if (!raw) return [];
-    return Array.isArray(raw) ? raw : [raw];
-}
-
 module.exports = {
     id: "SECURITY",
     name: "Security Headers",
@@ -123,9 +117,9 @@ module.exports = {
                 }));
             }
 
-            const cookies = getCookies(headers);
-            const insecureCookies = cookies.filter(c => !/;\s*secure/i.test(c));
-            const nonHttpOnlyCookies = cookies.filter(c => !/;\s*httponly/i.test(c));
+            const cookies = page.cookies || [];
+            const insecureCookies = cookies.filter(c => !c.secure);
+            const nonHttpOnlyCookies = cookies.filter(c => !c.httpOnly);
 
             if (insecureCookies.length > 0 || nonHttpOnlyCookies.length > 0) {
                 findings.push(createFinding({

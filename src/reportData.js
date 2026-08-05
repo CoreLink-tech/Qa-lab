@@ -3,17 +3,16 @@
 // the way report.js and exporter.js previously did (two different shapes,
 // both writing reports/report.json, silently overwriting each other).
 function buildReportData(websiteModel) {
-    const pages = websiteModel.pages.map(page => ({
-        url: page.url,
-        status: page.status,
-        responseTime: page.responseTime,
-        title: page.title,
-        headings: page.headings,
-        images: page.images,
-        forms: page.forms,
-        links: page.links,
-        headers: page.headers
-    }));
+    const pages = websiteModel.pages.map(page => {
+        // Exclude only the raw HTML source (large, not useful in a report).
+        // Everything else the model captures is included by default --
+        // this used to be an explicit field whitelist, which silently
+        // dropped every new field added to the model (meta, scripts,
+        // cookies, technologies, etc. were all missing from reports
+        // until this was caught during Phase 3 testing).
+        const { html, ...reportablePage } = page;
+        return reportablePage;
+    });
 
     return {
         schemaVersion: websiteModel.schemaVersion,

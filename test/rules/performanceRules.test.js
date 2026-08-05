@@ -70,3 +70,44 @@ test("does not flag a normally sized page for weight", () => {
     const model = makeModel([makePage({ htmlSize: 50000, headers: { "content-encoding": "gzip", "cache-control": "max-age=3600" } })]);
     assert.ok(!ids(rule.run(model)).includes("PERF005"));
 });
+
+test("flags a render-blocking script in head with no async/defer", () => {
+    const model = makeModel([makePage({
+        htmlSize: 200,
+        headers: { "content-encoding": "gzip", "cache-control": "max-age=3600" },
+        scripts: [{ src: "/app.js", inline: false, location: "head", async: false, defer: false }]
+    })]);
+    const finding = require("../../src/rules/performanceRules").run(model).find(f => f.id === "PERF006");
+    assert.ok(finding);
+    assert.match(finding.details, /\/app\.js/);
+});
+
+test("does not flag a head script that has defer set", () => {
+    const model = makeModel([makePage({
+        htmlSize: 200,
+        headers: { "content-encoding": "gzip", "cache-control": "max-age=3600" },
+        scripts: [{ src: "/app.js", inline: false, location: "head", async: false, defer: true }]
+    })]);
+    const findings = require("../../src/rules/performanceRules").run(model);
+    assert.ok(!findings.map(f => f.id).includes("PERF006"));
+});
+
+test("does not flag a body script even without async/defer", () => {
+    const model = makeModel([makePage({
+        htmlSize: 200,
+        headers: { "content-encoding": "gzip", "cache-control": "max-age=3600" },
+        scripts: [{ src: "/app.js", inline: false, location: "body", async: false, defer: false }]
+    })]);
+    const findings = require("../../src/rules/performanceRules").run(model);
+    assert.ok(!findings.map(f => f.id).includes("PERF006"));
+});
+
+test("does not flag an inline head script (no src to defer)", () => {
+    const model = makeModel([makePage({
+        htmlSize: 200,
+        headers: { "content-encoding": "gzip", "cache-control": "max-age=3600" },
+        scripts: [{ src: null, inline: true, location: "head", async: false, defer: false }]
+    })]);
+    const findings = require("../../src/rules/performanceRules").run(model);
+    assert.ok(!findings.map(f => f.id).includes("PERF006"));
+});

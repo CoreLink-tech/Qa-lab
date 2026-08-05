@@ -10,7 +10,7 @@ module.exports = {
     id: "PERFORMANCE",
     name: "Performance Rules",
     category: Category.PERFORMANCE,
-    description: "Checks page response times, compression, caching headers, and overall page weight.",
+    description: "Checks page response times, compression, caching headers, overall page weight, and render-blocking scripts.",
     enabled: true,
 
     run(websiteModel) {
@@ -87,6 +87,23 @@ module.exports = {
                     details: `HTML document is ${Math.round(htmlSize / 1024)} KB.`,
                     recommendation: "Reduce initial HTML size: paginate large lists, lazy-load below-the-fold content, and trim unnecessary markup.",
                     documentation: "https://web.dev/articles/reduce-network-payloads-using-text-compression"
+                }));
+            }
+
+            const renderBlockingScripts = (page.scripts || []).filter(
+                script => script.location === "head" && script.src && !script.async && !script.defer
+            );
+
+            if (renderBlockingScripts.length > 0) {
+                findings.push(createFinding({
+                    id: "PERF006",
+                    title: "Render-Blocking Script",
+                    category: Category.PERFORMANCE,
+                    severity: Severity.MEDIUM,
+                    page: page.url,
+                    details: `${renderBlockingScripts.length} script(s) in <head> block rendering (no async or defer): ${renderBlockingScripts.map(s => s.src).join(", ")}`,
+                    recommendation: "Add the async or defer attribute to non-critical scripts in <head>, or move them to the end of <body>.",
+                    documentation: "https://web.dev/articles/render-blocking-resources"
                 }));
             }
         }

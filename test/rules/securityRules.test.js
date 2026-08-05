@@ -80,7 +80,8 @@ test("does not flag a generic Server header with no version", () => {
 
 test("flags a cookie missing Secure and HttpOnly flags", () => {
     const model = makeModel([makePage({
-        headers: { ...goodHeaders, "set-cookie": ["sessionid=abc123; Path=/"] }
+        headers: goodHeaders,
+        cookies: [{ name: "sessionid", secure: false, httpOnly: false, sameSite: null }]
     })]);
     const finding = rule.run(model).find(f => f.id === "SEC008");
     assert.ok(finding);
@@ -89,17 +90,23 @@ test("flags a cookie missing Secure and HttpOnly flags", () => {
 
 test("does not flag a properly secured cookie", () => {
     const model = makeModel([makePage({
-        headers: { ...goodHeaders, "set-cookie": ["sessionid=abc123; Path=/; Secure; HttpOnly"] }
+        headers: goodHeaders,
+        cookies: [{ name: "sessionid", secure: true, httpOnly: true, sameSite: "Strict" }]
     })]);
     assert.ok(!ids(rule.run(model)).includes("SEC008"));
 });
 
-test("handles set-cookie as a single string, not just an array", () => {
+test("handles multiple cookies, flagging only the ones missing flags", () => {
     const model = makeModel([makePage({
-        headers: { ...goodHeaders, "set-cookie": "sessionid=abc123; Path=/" }
+        headers: goodHeaders,
+        cookies: [
+            { name: "good", secure: true, httpOnly: true, sameSite: null },
+            { name: "bad", secure: false, httpOnly: false, sameSite: null }
+        ]
     })]);
-    assert.doesNotThrow(() => rule.run(model));
-    assert.ok(ids(rule.run(model)).includes("SEC008"));
+    const finding = rule.run(model).find(f => f.id === "SEC008");
+    assert.ok(finding);
+    assert.match(finding.details, /1 cookie\(s\) missing Secure, 1 missing HttpOnly/);
 });
 
 test("flags mixed content on an HTTPS page", () => {
