@@ -8,6 +8,7 @@ const generateReport = require("./report");
 const { runRules } = require("./ruleEngine");
 const { calculateScore } = require("./scoring");
 const { generateRecommendations } = require("./recommendations");
+const { mapWithConcurrency } = require("./utils/concurrency");
 
 
 async function main() {
@@ -15,6 +16,13 @@ async function main() {
      const args = process.argv.slice(2);
 
 const url = args.find(arg => !arg.startsWith("--"));
+
+const DEFAULT_CONCURRENCY = 5;
+
+const concurrencyArg = args.find(arg => arg.startsWith("--concurrency="));
+const concurrency = concurrencyArg
+    ? Math.max(1, parseInt(concurrencyArg.split("=")[1], 10) || DEFAULT_CONCURRENCY)
+    : DEFAULT_CONCURRENCY;
 
 const options = {
     summary: args.includes("--summary"),
@@ -34,13 +42,14 @@ Usage:
 node src/index.js <website> [options]
 
 Options:
-  --summary   Show scan summary
-  --issues    Show issues in terminal
-  --verbose   Print every scanned page
-  --quiet     Show only final results
-  --json      Export JSON report
-  --html      Export HTML report
-  --help      Show this help
+  --summary             Show scan summary
+  --issues              Show issues in terminal
+  --verbose             Print every scanned page
+  --quiet               Show only final results
+  --json                Export JSON report
+  --html                Export HTML report
+  --concurrency=N       Max pages scanned in parallel (default: ${DEFAULT_CONCURRENCY})
+  --help                Show this help
 `);
     process.exit(0);
 }
@@ -75,19 +84,14 @@ if (options.verbose) {
 }
 
 
-    for (const link of links) {
+    const scannedPages = await mapWithConcurrency(links, concurrency, async (link) => {
 
         const page = await scanPage(url, link);
-
 
         const normalizedPage = normalizePage(
             page,
             page.html || ""
         );
-
-
-        pages.push(normalizedPage);
-
 
 if (options.verbose) {
     console.log("--------------------------------------");
@@ -96,7 +100,11 @@ if (options.verbose) {
     console.log(`Response Time : ${normalizedPage.responseTime} ms`);
     console.log(`Title : ${normalizedPage.title}`);
 }
-    }
+
+        return normalizedPage;
+    });
+
+    pages.push(...scannedPages);
 
 
 
