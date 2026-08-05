@@ -1,43 +1,56 @@
 #!/usr/bin/env node
 const { printSummary, printIssues } = require("./terminalReport");
 const { createWebsiteModel } = require("./models/websiteModel");
-const { crawlWebsite } = require("./crawler");
-const { scanPage } = require("./pageScanner");
+const { crawlSite } = require("./siteCrawler");
 const { normalizePage } = require("./normalizer");
 const generateReport = require("./report");
 const { runRules } = require("./ruleEngine");
 const { calculateScore } = require("./scoring");
 const { generateRecommendations } = require("./recommendations");
-const { mapWithConcurrency } = require("./utils/concurrency");
 const { checkAssets } = require("./assetChecker");
 
 
 async function main() {
 
-     const args = process.argv.slice(2);
+    const args = process.argv.slice(2);
 
-const url = args.find(arg => !arg.startsWith("--"));
+    const url = args.find(arg => !arg.startsWith("--"));
 
-const DEFAULT_CONCURRENCY = 5;
+    const DEFAULT_CONCURRENCY = 5;
+    const DEFAULT_DEPTH = 2;
+    const DEFAULT_MAX_PAGES = 100;
 
-const concurrencyArg = args.find(arg => arg.startsWith("--concurrency="));
-const concurrency = concurrencyArg
-    ? Math.max(1, parseInt(concurrencyArg.split("=")[1], 10) || DEFAULT_CONCURRENCY)
-    : DEFAULT_CONCURRENCY;
+    const concurrencyArg = args.find(arg => arg.startsWith("--concurrency="));
+    const concurrency = concurrencyArg
+        ? Math.max(1, parseInt(concurrencyArg.split("=")[1], 10) || DEFAULT_CONCURRENCY)
+        : DEFAULT_CONCURRENCY;
 
-const options = {
-    summary: args.includes("--summary"),
-    issues: args.includes("--issues"),
-    verbose: args.includes("--verbose"),
-    quiet: args.includes("--quiet"),
-    help: args.includes("--help"),
-    json: args.includes("--json"),
-    html: args.includes("--html"),
-    checkAssets: args.includes("--check-assets")
-};
+    const depthArg = args.find(arg => arg.startsWith("--depth="));
+    const parsedDepth = depthArg ? parseInt(depthArg.split("=")[1], 10) : DEFAULT_DEPTH;
+    const depth = Number.isNaN(parsedDepth) ? DEFAULT_DEPTH : Math.max(0, parsedDepth);
 
-if (options.help || !url) {
-    console.log(`
+    const maxPagesArg = args.find(arg => arg.startsWith("--max-pages="));
+    const maxPages = maxPagesArg
+        ? Math.max(1, parseInt(maxPagesArg.split("=")[1], 10) || DEFAULT_MAX_PAGES)
+        : DEFAULT_MAX_PAGES;
+
+    const delayArg = args.find(arg => arg.startsWith("--delay="));
+    const delayMs = delayArg ? Math.max(0, parseInt(delayArg.split("=")[1], 10) || 0) : 0;
+
+    const options = {
+        summary: args.includes("--summary"),
+        issues: args.includes("--issues"),
+        verbose: args.includes("--verbose"),
+        quiet: args.includes("--quiet"),
+        help: args.includes("--help"),
+        json: args.includes("--json"),
+        html: args.includes("--html"),
+        checkAssets: args.includes("--check-assets"),
+        ignoreRobots: args.includes("--ignore-robots")
+    };
+
+    if (options.help || !url) {
+        console.log(`
 QA-LAB
 
 Usage:
@@ -46,72 +59,53 @@ node src/index.js <website> [options]
 Options:
   --summary             Show scan summary
   --issues              Show issues in terminal
-  --verbose             Print every scanned page
-  --quiet               Show only final results
-  --json                Export JSON report
-  --html                Export HTML report
-  --concurrency=N       Max pages scanned in parallel (default: ${DEFAULT_CONCURRENCY})
-  --check-assets        Fetch every unique script/stylesheet/image site-wide to
+  --verbose              Print every scanned page
+  --quiet                Show only final results
+  --json                 Export JSON report
+  --html                 Export HTML report
+  --concurrency=N        Max pages fetched in parallel (default: ${DEFAULT_CONCURRENCY})
+  --depth=N              Max link-following depth from the start URL (default: ${DEFAULT_DEPTH})
+  --max-pages=N          Safety cap on total pages crawled (default: ${DEFAULT_MAX_PAGES})
+  --delay=MS             Minimum delay between requests, for politeness (default: 0)
+  --ignore-robots        Don't respect robots.txt Disallow rules (respected by default)
+  --check-assets         Fetch every unique script/stylesheet/image site-wide to
                          check for missing, oversized, or duplicate-content assets.
                          Off by default: adds real network requests beyond normal
                          page scanning, against whatever site you're scanning.
-  --help                Show this help
+  --help                 Show this help
 `);
-    process.exit(0);
-}
-    // Crawl homepage once: gives us both homepage page-data and the
-    // links discovered on it, in a single request.
-    const { homepage, links } = await crawlWebsite(url);
+        process.exit(0);
+    }
 
-
-if (options.verbose) {
-    console.log("\n========== DISCOVERED LINKS ==========\n");
-
-    links.forEach((link, index) => {
-        console.log(`${index + 1}. ${link}`);
+    const { pages: rawPages, truncated, robotsBlockedCount } = await crawlSite(url, {
+        maxDepth: depth,
+        maxPages,
+        concurrency,
+        respectRobots: !options.ignoreRobots,
+        delayMs
     });
 
-    console.log("\n========== PAGE TEST RESULTS ==========\n");
-}
+    if (truncated) {
+        console.log(`Crawl stopped early: hit the ${maxPages}-page limit before the site was fully crawled. Use --max-pages to raise it.`);
+    }
 
-    const pages = [];
+    if (robotsBlockedCount > 0) {
+        console.log(`Skipped ${robotsBlockedCount} link(s) disallowed by robots.txt. Use --ignore-robots to crawl them anyway.`);
+    }
 
-    // Homepage is page one, built from the crawl's own response instead
-    // of fetching it again.
-    const normalizedHomepage = normalizePage(homepage, homepage.html || "");
-    pages.push(normalizedHomepage);
+    const pages = rawPages.map(page => normalizePage(page, page.html || ""));
 
-if (options.verbose) {
-    console.log("--------------------------------------");
-    console.log(`Page : ${normalizedHomepage.url}`);
-    console.log(`Status : ${normalizedHomepage.status}`);
-    console.log(`Response Time : ${normalizedHomepage.responseTime} ms`);
-    console.log(`Title : ${normalizedHomepage.title}`);
-}
-
-
-    const scannedPages = await mapWithConcurrency(links, concurrency, async (link) => {
-
-        const page = await scanPage(url, link);
-
-        const normalizedPage = normalizePage(
-            page,
-            page.html || ""
-        );
-
-if (options.verbose) {
-    console.log("--------------------------------------");
-    console.log(`Page : ${normalizedPage.url}`);
-    console.log(`Status : ${normalizedPage.status}`);
-    console.log(`Response Time : ${normalizedPage.responseTime} ms`);
-    console.log(`Title : ${normalizedPage.title}`);
-}
-
-        return normalizedPage;
-    });
-
-    pages.push(...scannedPages);
-
+    if (options.verbose) {
+        console.log("\n========== PAGES SCANNED ==========\n");
+        pages.forEach(page => {
+            console.log("--------------------------------------");
+            console.log(`Page : ${page.url}`);
+            console.log(`Depth : ${page.depth}`);
+            console.log(`Status : ${page.status}`);
+            console.log(`Response Time : ${page.responseTime} ms`);
+            console.log(`Title : ${page.title}`);
+        });
+    }
 
 
     // Website Data Model
@@ -165,13 +159,13 @@ if (options.verbose) {
 
 
 
-console.log("\n========== QA COMPLETE ==========");
+    console.log("\n========== QA COMPLETE ==========");
 
-printSummary(websiteModel);
+    printSummary(websiteModel);
 
-if (options.issues) {
-    printIssues(websiteModel);
-}
+    if (options.issues) {
+        printIssues(websiteModel);
+    }
 }
 
 main();
