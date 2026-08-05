@@ -26,7 +26,8 @@ function normalizePage(page, html) {
 
     const images = {
         total: $("img").length,
-        missingAlt: $("img:not([alt]), img[alt='']").length
+        missingAlt: $("img:not([alt]), img[alt='']").length,
+        sources: $("img").map((i, el) => $(el).attr("src") || null).get().filter(Boolean)
     };
 
     const links = [];

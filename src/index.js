@@ -9,6 +9,7 @@ const { runRules } = require("./ruleEngine");
 const { calculateScore } = require("./scoring");
 const { generateRecommendations } = require("./recommendations");
 const { mapWithConcurrency } = require("./utils/concurrency");
+const { checkAssets } = require("./assetChecker");
 
 
 async function main() {
@@ -31,7 +32,8 @@ const options = {
     quiet: args.includes("--quiet"),
     help: args.includes("--help"),
     json: args.includes("--json"),
-    html: args.includes("--html")
+    html: args.includes("--html"),
+    checkAssets: args.includes("--check-assets")
 };
 
 if (options.help || !url) {
@@ -49,6 +51,10 @@ Options:
   --json                Export JSON report
   --html                Export HTML report
   --concurrency=N       Max pages scanned in parallel (default: ${DEFAULT_CONCURRENCY})
+  --check-assets        Fetch every unique script/stylesheet/image site-wide to
+                         check for missing, oversized, or duplicate-content assets.
+                         Off by default: adds real network requests beyond normal
+                         page scanning, against whatever site you're scanning.
   --help                Show this help
 `);
     process.exit(0);
@@ -116,6 +122,10 @@ if (options.verbose) {
     websiteModel.totalPages = pages.length;
     websiteModel.summary.pagesScanned = pages.length;
 
+
+    if (options.checkAssets) {
+        websiteModel.assetChecks = await checkAssets(websiteModel, { concurrency });
+    }
 
 
     console.log("Running QA Rules...");
