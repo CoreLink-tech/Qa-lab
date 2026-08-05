@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 const { printSummary, printIssues } = require("./terminalReport");
 const { createWebsiteModel } = require("./models/websiteModel");
-const { scanWebsite } = require("./scanner");
 const { crawlWebsite } = require("./crawler");
 const { scanPage } = require("./pageScanner");
 const { normalizePage } = require("./normalizer");
@@ -45,12 +44,9 @@ Options:
 `);
     process.exit(0);
 }
-    // Scan homepage
-    const websiteResult = await scanWebsite(url);
-
-
-    // Discover links
-    const links = await crawlWebsite(url);
+    // Crawl homepage once: gives us both homepage page-data and the
+    // links discovered on it, in a single request.
+    const { homepage, links } = await crawlWebsite(url);
 
 
 if (options.verbose) {
@@ -64,6 +60,19 @@ if (options.verbose) {
 }
 
     const pages = [];
+
+    // Homepage is page one, built from the crawl's own response instead
+    // of fetching it again.
+    const normalizedHomepage = normalizePage(homepage, homepage.html || "");
+    pages.push(normalizedHomepage);
+
+if (options.verbose) {
+    console.log("--------------------------------------");
+    console.log(`Page : ${normalizedHomepage.url}`);
+    console.log(`Status : ${normalizedHomepage.status}`);
+    console.log(`Response Time : ${normalizedHomepage.responseTime} ms`);
+    console.log(`Title : ${normalizedHomepage.title}`);
+}
 
 
     for (const link of links) {
@@ -120,11 +129,6 @@ if (options.verbose) {
 
     const score = calculateScore(issues);
 
-
-
-    websiteResult.score = score;
-
-    websiteResult.pagesScanned = pages.length;
 
 
     websiteModel.score = score;

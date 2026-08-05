@@ -1,16 +1,30 @@
-const axios = require("axios");
 const cheerio = require("cheerio");
+const { httpClient } = require("./utils/httpClient");
 const { normalizeUrl, removeDuplicates } = require("./utils/urlNormalizer");
 
+// Crawls the homepage once and returns both the page data for that fetch
+// AND the discovered links, so callers don't need a second request just
+// to get homepage data (that was the old scanner.js + crawler.js split).
 async function crawlWebsite(url) {
     try {
         console.log("Crawling:", url);
 
-        const response = await axios.get(url);
+        const start = Date.now();
+        const response = await httpClient.get(url);
+        const responseTime = Date.now() - start;
 
         console.log("Crawler Status:", response.status);
 
         const $ = cheerio.load(response.data);
+
+        const homepage = {
+            url,
+            status: response.status,
+            responseTime,
+            title: $("title").text().trim() || null,
+            html: response.data,
+            headers: response.headers
+        };
 
         const links = [];
 
@@ -26,11 +40,16 @@ async function crawlWebsite(url) {
             }
         });
 
-        const uniqueLinks = removeDuplicates(links);
+        // Don't let the homepage show up twice: once as `homepage`, and
+        // again as a link scanned separately just because the nav bar
+        // links back to "/".
+        const homepagePath = new URL(url).pathname + new URL(url).search;
+        const uniqueLinks = removeDuplicates(links)
+            .filter(link => link !== homepagePath);
 
         console.log(`Crawler found ${uniqueLinks.length} links.`);
 
-        return uniqueLinks;
+        return { homepage, links: uniqueLinks };
 
     } catch (error) {
 
@@ -45,7 +64,18 @@ async function crawlWebsite(url) {
 
         console.error("=========================\n");
 
-        return [];
+        return {
+            homepage: {
+                url,
+                status: error.response?.status || "Unknown",
+                responseTime: null,
+                title: null,
+                html: "",
+                headers: {},
+                error: error.message
+            },
+            links: []
+        };
     }
 }
 

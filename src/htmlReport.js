@@ -1,3 +1,12 @@
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
 function generateHTMLReport(data) {
 
     const score = data.score?.score || 0;
@@ -12,12 +21,15 @@ function generateHTMLReport(data) {
 
     const findings = data.findings || [];
 
+    // Finding details/titles can echo content scraped from the target
+    // site (e.g. a page title). Escape everything before it goes into
+    // the HTML report to avoid stored XSS when someone opens the report.
     const rows = findings.map(issue => `
 <tr>
-<td>${issue.title || "-"}</td>
-<td>${issue.severity || "-"}</td>
-<td>${issue.page || "-"}</td>
-<td>${issue.details || "-"}</td>
+<td>${escapeHtml(issue.title || "-")}</td>
+<td>${escapeHtml(issue.severity || "-")}</td>
+<td>${escapeHtml(issue.page || "-")}</td>
+<td>${escapeHtml(issue.details || "-")}</td>
 </tr>
 `).join("");
 
@@ -121,7 +133,7 @@ tr:nth-child(even){
 
 <h1>QA Lab Audit Report</h1>
 
-<p><strong>Website:</strong> ${data.url}</p>
+<p><strong>Website:</strong> ${escapeHtml(data.url)}</p>
 
 <p><strong>Generated:</strong> ${new Date(data.timestamp).toLocaleString()}</p>
 
