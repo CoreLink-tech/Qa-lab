@@ -17,8 +17,7 @@ function validateRule(rule, file) {
     }
 }
 
-function loadRules() {
-    const rulesDir = path.join(__dirname, "..", "rules");
+function loadRules(rulesDir = path.join(__dirname, "..", "rules")) {
 
     return fs.readdirSync(rulesDir)
         .filter(file => file.endsWith(".js"))
@@ -31,5 +30,6 @@ function loadRules() {
 }
 
 module.exports = {
-    loadRules
+    loadRules,
+    validateRule
 };
