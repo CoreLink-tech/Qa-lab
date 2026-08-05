@@ -1,4 +1,6 @@
 const cheerio = require("cheerio");
+const { parseCookies } = require("./utils/cookieParser");
+const { detectTechnologies } = require("./utils/technologyDetection");
 
 const HEADING_TAGS = ["h1", "h2", "h3", "h4", "h5", "h6"];
 const CSRF_NAME_PATTERN = /csrf|_token|authenticity_token/i;
@@ -113,6 +115,36 @@ function normalizePage(page, html) {
 
     const htmlSize = Buffer.byteLength(html || "", "utf8");
 
+    // Real resource lists, not just <a> links -- needed for accurate
+    // asset checks and render-blocking-script detection.
+    const scripts = $("script").map((i, el) => {
+        const $el = $(el);
+        const src = $el.attr("src") || null;
+        return {
+            src,
+            inline: !src,
+            location: $el.parents("head").length > 0 ? "head" : "body",
+            async: $el.attr("async") !== undefined,
+            defer: $el.attr("defer") !== undefined
+        };
+    }).get();
+
+    const stylesheets = $("link[rel='stylesheet']").map((i, el) => ({
+        href: $(el).attr("href") || null
+    })).get();
+
+    const cookies = parseCookies(page.headers?.["set-cookie"]);
+
+    const technologies = detectTechnologies({
+        generator: $("meta[name='generator']").attr("content") || "",
+        resourcePaths: [
+            ...scripts.map(s => s.src).filter(Boolean),
+            ...stylesheets.map(s => s.href).filter(Boolean)
+        ],
+        headers: page.headers || {},
+        cookieNames: cookies.map(c => c.name)
+    });
+
     return {
         ...page,
         headings,
@@ -125,7 +157,11 @@ function normalizePage(page, html) {
         lang,
         labelFors,
         mixedContentCount,
-        htmlSize
+        htmlSize,
+        scripts,
+        stylesheets,
+        cookies,
+        technologies
     };
 }
 
