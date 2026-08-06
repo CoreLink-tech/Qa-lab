@@ -68,3 +68,9 @@ test("an unrecognized format string is silently ignored rather than crashing the
     assert.doesNotThrow(() => generateReport(fakeModel(), { formats: ["json", "not-a-real-format"] }));
     assert.ok(fs.existsSync(path.join(reportsDir, "report.json")));
 });
+
+test("generateReport returns the reportData it built, so callers can reuse it", () => {
+    const returned = generateReport(fakeModel(), { formats: ["json"] });
+    assert.equal(returned.url, "https://example.com");
+    assert.equal(returned.findings.length, 1);
+});
