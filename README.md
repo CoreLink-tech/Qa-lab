@@ -188,6 +188,28 @@ reports/
 └── report.html
 ```
 
+## Quality Gates (CI/CD)
+
+QA Lab can fail its own exit code based on scan results, so it can act as a
+build gate instead of just a report generator:
+
+```bash
+# Exit 1 if any finding is "high" severity or worse
+node src/index.js https://example.com --fail-on=high
+
+# Exit 1 if the overall score drops below 70
+node src/index.js https://example.com --min-score=70
+
+# Both conditions can be combined -- either one failing fails the gate
+node src/index.js https://example.com --fail-on=critical --min-score=70
+```
+
+Reports are still written even when the gate fails, so a failed CI run has
+something to inspect. See `.github/workflows/test.yml` for the workflow that
+runs QA Lab's own test suite, and
+`.github/workflows/qa-lab-quality-gate.yml.example` for a template you can
+copy into another repo to scan and gate a site of your own.
+
 ---
 
 # Architecture
@@ -225,11 +247,8 @@ Upcoming features include:
 - User Authentication
 - Dashboard
 - Project Management
-- Scan History
-- Scheduled Scans
 - Team Workspaces
-- CI/CD Pipeline
-- Automated Testing
+- PR comment posting for CI quality gate results
 - Plugin System
 - Public API
 - Continuous Website Monitoring
