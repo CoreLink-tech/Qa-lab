@@ -26,4 +26,19 @@ function buildReportData(websiteModel) {
     };
 }
 
-module.exports = { buildReportData };
+function filterReportDataByCategory(reportData, category) {
+    const findings = (reportData.findings || []).filter(f => f.category === category);
+    const recommendations = (reportData.recommendations || []).filter(r => r.category === category);
+
+    return {
+        ...reportData,
+        findings,
+        recommendations,
+        summary: {
+            ...reportData.summary,
+            issuesFound: findings.length
+        }
+    };
+}
+
+module.exports = { buildReportData, filterReportDataByCategory };
