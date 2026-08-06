@@ -46,3 +46,32 @@ test("includes top-level score, summary, findings, and recommendations", () => {
     assert.equal(report.findings.length, 1);
     assert.equal(report.recommendations.length, 1);
 });
+
+test("filterReportDataByCategory keeps only matching findings and recommendations", () => {
+    const { filterReportDataByCategory } = require("../src/reportData");
+    const reportData = {
+        summary: { issuesFound: 3 },
+        findings: [
+            { id: "A", category: "Security" },
+            { id: "B", category: "SEO" },
+            { id: "C", category: "Security" }
+        ],
+        recommendations: [
+            { issue: "A", category: "Security" },
+            { issue: "B", category: "SEO" }
+        ]
+    };
+    const filtered = filterReportDataByCategory(reportData, "Security");
+    assert.equal(filtered.findings.length, 2);
+    assert.ok(filtered.findings.every(f => f.category === "Security"));
+    assert.equal(filtered.recommendations.length, 1);
+    assert.equal(filtered.summary.issuesFound, 2);
+});
+
+test("filterReportDataByCategory returns empty results for a category with no matches", () => {
+    const { filterReportDataByCategory } = require("../src/reportData");
+    const reportData = { summary: {}, findings: [{ id: "A", category: "SEO" }], recommendations: [] };
+    const filtered = filterReportDataByCategory(reportData, "Security");
+    assert.equal(filtered.findings.length, 0);
+    assert.equal(filtered.summary.issuesFound, 0);
+});

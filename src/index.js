@@ -55,6 +55,9 @@ async function main() {
     const includePatterns = compileRegexFlags("--include=");
     const excludePatterns = compileRegexFlags("--exclude=");
 
+    const reportCategoryArg = args.find(arg => arg.startsWith("--report-category="));
+    const reportCategory = reportCategoryArg ? reportCategoryArg.split("=")[1] : null;
+
     const options = {
         summary: args.includes("--summary"),
         issues: args.includes("--issues"),
@@ -63,10 +66,23 @@ async function main() {
         help: args.includes("--help"),
         json: args.includes("--json"),
         html: args.includes("--html"),
+        csv: args.includes("--csv"),
+        md: args.includes("--md"),
+        executiveSummary: args.includes("--executive-summary"),
         checkAssets: args.includes("--check-assets"),
         ignoreRobots: args.includes("--ignore-robots"),
         useSitemap: args.includes("--use-sitemap")
     };
+
+    // If no format flags are given, default to json + html -- unchanged
+    // from every prior version of this tool.
+    const requestedFormats = [];
+    if (options.json) requestedFormats.push("json");
+    if (options.html) requestedFormats.push("html");
+    if (options.csv) requestedFormats.push("csv");
+    if (options.md) requestedFormats.push("md");
+    if (options.executiveSummary) requestedFormats.push("executive");
+    const formats = requestedFormats.length > 0 ? requestedFormats : ["json", "html"];
 
     if (options.help || !url) {
         console.log(`
@@ -82,6 +98,11 @@ Options:
   --quiet                Show only final results
   --json                 Export JSON report
   --html                 Export HTML report
+  --csv                  Export CSV report
+  --md                   Export Markdown report
+  --executive-summary    Export a condensed executive summary (Markdown)
+  --report-category=CAT  Only include findings from one category (e.g.
+                         Security, SEO, Accessibility) in generated reports
   --concurrency=N        Max pages fetched in parallel (default: ${DEFAULT_CONCURRENCY})
   --depth=N              Max link-following depth from the start URL (default: ${DEFAULT_DEPTH})
   --max-pages=N          Safety cap on total pages crawled (default: ${DEFAULT_MAX_PAGES})
@@ -193,7 +214,7 @@ Options:
 
     // Generate HTML + JSON Report
 
-    generateReport(websiteModel);
+    generateReport(websiteModel, { formats, reportCategory });
 
 
 
