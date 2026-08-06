@@ -10,9 +10,16 @@ const { httpClient } = require("./utils/httpClient");
 function parseRobotsTxt(text) {
     const lines = (text || "").split("\n").map(line => line.trim());
     const disallowed = [];
+    const sitemaps = [];
     let inWildcardBlock = false;
 
     for (const line of lines) {
+        const sitemapMatch = line.match(/^sitemap:\s*(.+)$/i);
+        if (sitemapMatch) {
+            sitemaps.push(sitemapMatch[1].trim());
+            continue;
+        }
+
         if (/^user-agent:\s*\*\s*$/i.test(line)) {
             inWildcardBlock = true;
             continue;
@@ -31,7 +38,7 @@ function parseRobotsTxt(text) {
         }
     }
 
-    return { disallowed };
+    return { disallowed, sitemaps };
 }
 
 async function fetchRobotsRules(baseUrl) {
@@ -42,7 +49,7 @@ async function fetchRobotsRules(baseUrl) {
     } catch {
         // No robots.txt, or it failed to fetch -- treat as "everything
         // allowed" rather than blocking the whole crawl over this.
-        return { disallowed: [] };
+        return { disallowed: [], sitemaps: [] };
     }
 }
 

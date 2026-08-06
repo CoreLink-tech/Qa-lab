@@ -7,7 +7,15 @@ function normalizeUrl(baseUrl, link) {
             return null;
         }
 
-        return url.pathname + url.search;
+        // "/about" and "/about/" are almost always the same page. Strip a
+        // trailing slash so they dedup as one, but never touch the root
+        // path itself ("/" must stay "/", not become "").
+        let path = url.pathname;
+        if (path.length > 1 && path.endsWith("/")) {
+            path = path.slice(0, -1);
+        }
+
+        return path + url.search;
 
     } catch (error) {
         return null;

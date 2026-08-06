@@ -3,6 +3,11 @@ const { normalizeUrl } = require("./utils/urlNormalizer");
 const { mapWithConcurrency } = require("./utils/concurrency");
 const { fetchRobotsRules, isAllowed } = require("./robotsTxt");
 const { createRateLimiter } = require("./utils/rateLimiter");
+const { discoverSitemapUrls } = require("./sitemapParser");
+
+function matchesAny(patterns, path) {
+    return patterns.some(pattern => pattern.test(path));
+}
 
 // Breadth-first crawl: fetches the seed URL, then all its links (depth 1),
 // then all of THEIR links (depth 2), and so on up to maxDepth, or until
@@ -21,11 +26,26 @@ async function crawlSite(startUrl, options = {}) {
         maxPages = 100,
         concurrency = 5,
         respectRobots = true,
-        delayMs = 0
+        delayMs = 0,
+        useSitemap = false,
+        includePatterns = [],
+        excludePatterns = []
     } = options;
 
-    const robotsRules = respectRobots ? await fetchRobotsRules(startUrl) : null;
+    // Sitemap discovery can use robots.txt's Sitemap: directive, so fetch
+    // robots.txt whenever either feature needs it -- once, shared by both.
+    const needsRobotsTxt = respectRobots || useSitemap;
+    const robotsRules = needsRobotsTxt ? await fetchRobotsRules(startUrl) : null;
+
+    const sitemapUrls = useSitemap ? await discoverSitemapUrls(startUrl, robotsRules) : [];
+
     const wait = createRateLimiter(delayMs);
+
+    function passesFilters(path) {
+        if (excludePatterns.length > 0 && matchesAny(excludePatterns, path)) return false;
+        if (includePatterns.length > 0 && !matchesAny(includePatterns, path)) return false;
+        return true;
+    }
 
     const startPath = new URL(startUrl).pathname + new URL(startUrl).search;
 
@@ -56,30 +76,40 @@ async function crawlSite(startUrl, options = {}) {
 
         const nextLevel = [];
 
+        const addCandidate = (resolvedPath, nextDepth) => {
+            if (nextLevel.length >= maxPages) return;
+            if (!resolvedPath) return;
+            if (visited.has(resolvedPath)) return;
+            if (!passesFilters(resolvedPath)) return;
+
+            if (respectRobots && !isAllowed(robotsRules, resolvedPath)) {
+                robotsBlockedCount++;
+                visited.add(resolvedPath);
+                return;
+            }
+
+            visited.add(resolvedPath);
+            nextLevel.push({ url: new URL(resolvedPath, startUrl).href, depth: nextDepth });
+        };
+
         for (const page of fetchedLevel) {
 
             if (page.depth >= maxDepth) continue;
             if (nextLevel.length >= maxPages) break;
 
             for (const rawLink of page.rawLinks) {
-
                 if (nextLevel.length >= maxPages) break;
+                addCandidate(normalizeUrl(page.url, rawLink), page.depth + 1);
+            }
+        }
 
-                const resolvedPath = normalizeUrl(page.url, rawLink);
-
-                if (!resolvedPath) continue;
-                if (visited.has(resolvedPath)) continue;
-
-                if (respectRobots && !isAllowed(robotsRules, resolvedPath)) {
-                    robotsBlockedCount++;
-                    visited.add(resolvedPath);
-                    continue;
-                }
-
-                visited.add(resolvedPath);
-
-                const resolvedUrl = new URL(resolvedPath, startUrl).href;
-                nextLevel.push({ url: resolvedUrl, depth: page.depth + 1 });
+        // Fold sitemap-discovered URLs into the depth-1 batch, alongside
+        // whatever the homepage's own links produced. Only relevant right
+        // after the seed page (depth 0) was fetched.
+        if (levelToFetch[0].depth === 0 && sitemapUrls.length > 0 && maxDepth >= 1) {
+            for (const sitemapUrl of sitemapUrls) {
+                if (nextLevel.length >= maxPages) break;
+                addCandidate(normalizeUrl(startUrl, sitemapUrl), 1);
             }
         }
 

@@ -14,7 +14,17 @@ test("ignores Disallow rules under a non-wildcard user-agent block", () => {
 });
 
 test("handles an empty robots.txt", () => {
-    assert.deepEqual(parseRobotsTxt(""), { disallowed: [] });
+    assert.deepEqual(parseRobotsTxt(""), { disallowed: [], sitemaps: [] });
+});
+
+test("captures Sitemap directives regardless of user-agent block", () => {
+    const rules = parseRobotsTxt("User-agent: *\nDisallow: /admin\nSitemap: https://example.com/sitemap.xml");
+    assert.deepEqual(rules.sitemaps, ["https://example.com/sitemap.xml"]);
+});
+
+test("captures multiple Sitemap directives", () => {
+    const rules = parseRobotsTxt("Sitemap: https://example.com/sitemap1.xml\nSitemap: https://example.com/sitemap2.xml");
+    assert.deepEqual(rules.sitemaps, ["https://example.com/sitemap1.xml", "https://example.com/sitemap2.xml"]);
 });
 
 test("isAllowed returns true when nothing is disallowed", () => {

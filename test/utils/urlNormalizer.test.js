@@ -22,3 +22,16 @@ test("removeDuplicates dedupes and drops falsy entries", () => {
     const result = removeDuplicates(["/a", "/a", "/b", null, "/b", undefined]);
     assert.deepEqual(result.sort(), ["/a", "/b"]);
 });
+
+test("strips a trailing slash so /about and /about/ dedup to the same path", () => {
+    assert.equal(normalizeUrl("https://example.com/", "/about/"), "/about");
+    assert.equal(normalizeUrl("https://example.com/", "/about"), "/about");
+});
+
+test("never strips the root path itself", () => {
+    assert.equal(normalizeUrl("https://example.com/", "/"), "/");
+});
+
+test("preserves a trailing-slash-stripped path alongside its query string", () => {
+    assert.equal(normalizeUrl("https://example.com/", "/search/?q=test"), "/search?q=test");
+});
