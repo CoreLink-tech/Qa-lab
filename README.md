@@ -1,58 +1,155 @@
-# QA-Lab
+# QA Lab
 
-QA-Lab is an open-source website quality analysis engine that helps developers identify performance, SEO, accessibility, security, and usability issues through automated scanning and professional reporting.
+> A modern website Quality Assurance platform for automated website auditing, analysis, and reporting.
 
-## Features
+QA Lab is a Node.js-powered website quality assurance engine that crawls websites, analyzes pages, detects quality issues, and generates detailed reports with actionable recommendations.
 
-- Website crawling
-- Multi-page scanning
-- Performance analysis
-- SEO checks
-- Accessibility checks
-- Form validation
-- Security checks
-- Link validation
-- HTML report generation
-- JSON report generation
-- Quality scoring# QA-Lab
-
-A lightweight command-line Quality Assurance (QA) tool for automatically scanning websites and generating actionable reports.
-
-QA-Lab crawls websites, analyzes pages, applies QA rules, calculates an overall quality score, and generates both HTML and JSON reports.
+Whether you're a developer, QA engineer, freelancer, agency, or business owner, QA Lab helps identify issues before they affect your users.
 
 ---
 
-## Features
+# Features
 
-- Website crawling
-- Multi-page scanning
-- Performance analysis
-- SEO checks
-- Accessibility checks
-- Form validation
-- Security checks
-- Link validation
-- HTML report generation
-- JSON report generation
-- Quality scoring
-- CLI interface
-- Issue categorization
-- Severity classification
+## Website Crawling
+
+- Multi-page website crawling
+- Internal link discovery
+- Configurable crawl depth
+- Duplicate URL prevention
+- Website structure analysis
 
 ---
 
-## Installation
+## Website Analysis
+
+QA Lab currently performs automated analysis across multiple quality categories.
+
+### SEO
+
+- Missing H1 headings
+- Multiple H1 headings
+- Missing meta descriptions
+- SEO best-practice validation
+
+### Accessibility
+
+- Missing image alt attributes
+- Accessibility best-practice checks
+
+### Security
+
+Checks important HTTP security headers including:
+
+- Content Security Policy (CSP)
+- Strict-Transport-Security
+- X-Frame-Options
+- X-Content-Type-Options
+
+### Performance
+
+- Response time analysis
+- Slow page detection
+- Performance quality scoring
+
+### Forms
+
+- Missing input names
+- Missing autocomplete attributes
+- Form quality validation
+
+### Links
+
+- Link extraction
+- Link validation
+- Broken link detection
+
+### Assets
+
+- Asset inspection
+- Website resource validation
+
+### Functionality
+
+- General website functionality checks
+
+---
+
+# Reports
+
+QA Lab automatically generates both machine-readable and human-readable reports.
+
+Supported report formats:
+
+- JSON
+- HTML
+
+Each report includes:
+
+- Overall Quality Score
+- Letter Grade
+- Severity Breakdown
+- Detailed Findings
+- Actionable Recommendations
+
+---
+
+# Scoring System
+
+Every website receives:
+
+- Overall Score
+- Letter Grade
+- Issue Summary
+
+Issue severities include:
+
+- Critical
+- High
+- Medium
+- Low
+
+---
+
+# Project Structure
+
+```text
+src/
+├── crawler.js
+├── pageScanner.js
+├── scanner.js
+├── normalizer.js
+├── websiteModel.js
+├── ruleEngine.js
+├── scoring.js
+├── report.js
+├── exporter.js
+├── recommendations/
+├── rules/
+│   ├── accessibilityRules.js
+│   ├── assetRules.js
+│   ├── formRules.js
+│   ├── functionalityRules.js
+│   ├── linkRules.js
+│   ├── performanceRules.js
+│   ├── securityRules.js
+│   └── seoRules.js
+└── utils.js
+```
+
+---
+
+# Installation
 
 Clone the repository:
 
 ```bash
-git clone https://github.com/CoreLink-tech/Qa-lab.git
+git clone https://github.com/CoreLink-tech/QA-Lab.git
 ```
 
-Go into the project directory:
+Move into the project:
 
 ```bash
-cd Qa-lab
+cd QA-Lab
 ```
 
 Install dependencies:
@@ -60,139 +157,118 @@ Install dependencies:
 ```bash
 npm install
 ```
+
 ---
 
-## Usage
+# Usage
 
-Scan a website:
+Run a website scan:
 
 ```bash
 node src/index.js https://example.com
 ```
 
-View all detected issues:
+Generate a summary:
+
+```bash
+node src/index.js https://example.com --summary
+```
+
+Display detected issues:
 
 ```bash
 node src/index.js https://example.com --issues
 ```
 
-Display the help menu:
+Reports are automatically generated inside:
 
-```bash
-node src/index.js --help
-```
-
-
-## Example Output
-
-```
-========== QA SUMMARY ==========
-
-Website       : https://example.com
-Score         : 85/100
-Grade         : B
-
-Pages Scanned : 32
-Issues Found  : 7
-
-Severity
-
-Critical : 0
-High     : 1
-Medium   : 2
-Low      : 4
-```
-
----
-
-## Reports
-
-QA-Lab generates:
-
-- HTML Report
-- JSON Report
-
-Reports are saved inside:
-
-```
+```text
 reports/
+├── report.json
+└── report.html
 ```
 
 ---
 
-## Current QA Checks
+# Architecture
 
-### Performance
-- Slow page detection
-- Response time measurement
+QA Lab follows a modular architecture.
 
-### SEO
-- Missing H1 detection
-- Multiple H1 detection
+Each component has a single responsibility.
 
-### Accessibility
-- Missing image alt attributes
+- Crawler
+- Page Scanner
+- Website Normalizer
+- Website Model
+- Rule Engine
+- Recommendation Engine
+- Scoring Engine
+- Report Generator
 
-### Forms
-- Missing input name attributes
-- Missing password autocomplete attributes
-
-### Links
-- Broken link detection
-
-### Security
-- Security header analysis
----
-
-## Roadmap
-
-### Version 1.1
-- Improved scoring algorithm
-- Better issue severity classification
-- Issue confidence levels
-- Duplicate issue detection
-- Summary-only CLI mode
-
-### Version 1.2
-- Lighthouse-style performance metrics
-- Mobile responsiveness checks
-- Metadata analysis
-- Sitemap validation
-- robots.txt validation
-
-### Version 2.0
-- PDF report generation
-- Screenshot capture
-- AI-powered recommendations
-- Historical scan comparison
-- CI/CD integration
-- REST API
----
-
-## Tech Stack
-
-- Node.js
-- JavaScript
-- Cheerio
-- Axios
-
-## Contributing
-
-Contributions are welcome. If you have ideas for improvements or discover bugs, feel free to open an issue or submit a pull request.
-
-## License
-
-This project is licensed under the MIT License.
-
-## Support
-
-If you find QA-Lab useful:
-
-- ⭐ Star this repository
-- 🐞 Report bugs through GitHub Issues
-- 💡 Suggest new features
-- 🍴 Fork the project and contribute
+This design keeps the project maintainable, scalable, and easy to extend.
 
 ---
 
-Built with ❤️ by **CoreLink Technologies**
+# Current Status
+
+QA Lab is under active development.
+
+The core website analysis engine is functional and continues to receive improvements in rule coverage, reporting, scoring, and overall accuracy.
+
+---
+
+# Roadmap
+
+Upcoming features include:
+
+- Backend API
+- User Authentication
+- Dashboard
+- Project Management
+- Scan History
+- Scheduled Scans
+- Team Workspaces
+- CI/CD Pipeline
+- Automated Testing
+- Plugin System
+- Public API
+- Continuous Website Monitoring
+- Cloud Deployment
+- Enterprise Reporting
+
+---
+
+# Vision
+
+Our goal is to build a comprehensive website Quality Assurance platform that combines automated crawling, website analysis, accessibility validation, SEO auditing, performance testing, security analysis, and intelligent reporting into a single developer-friendly solution.
+
+---
+
+# Contributing
+
+Contributions, ideas, feature requests, and bug reports are welcome.
+
+If you'd like to contribute:
+
+1. Fork the repository.
+2. Create a feature branch.
+3. Commit your changes.
+4. Open a Pull Request.
+
+---
+
+# License
+
+This project is currently proprietary.
+
+All rights reserved.
+
+The source code may not be copied, modified, distributed, or used commercially without explicit permission from the project owner.
+
+---
+
+# Author
+
+Developed by **CoreLink Technologies**.
+
+Building next-generation tools for software quality assurance and developer productivity.
