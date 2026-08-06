@@ -11,6 +11,7 @@ const { generateRecommendations } = require("./recommendations");
 const { checkAssets } = require("./assetChecker");
 const { saveScanToHistory, loadScanHistory, getPreviousFullScan } = require("./scanHistory");
 const { compareScans } = require("./scanComparison");
+const { evaluateQualityGate, isValidSeverity } = require("./qualityGate");
 
 
 async function main() {
@@ -60,6 +61,12 @@ async function main() {
 
     const reportCategoryArg = args.find(arg => arg.startsWith("--report-category="));
     const reportCategory = reportCategoryArg ? reportCategoryArg.split("=")[1] : null;
+
+    const failOnArg = args.find(arg => arg.startsWith("--fail-on="));
+    const failOnSeverity = failOnArg ? failOnArg.split("=")[1] : null;
+
+    const minScoreArg = args.find(arg => arg.startsWith("--min-score="));
+    const minScore = minScoreArg ? Number(minScoreArg.split("=")[1]) : null;
 
     const options = {
         summary: args.includes("--summary"),
@@ -132,6 +139,13 @@ Options:
                          check for missing, oversized, or duplicate-content assets.
                          Off by default: adds real network requests beyond normal
                          page scanning, against whatever site you're scanning.
+  --fail-on=SEVERITY     Exit with code 1 if any finding at or above this severity
+                         exists (critical, high, medium, low, or info). Intended
+                         for CI quality gates. Reports are still written even on
+                         failure. Off by default.
+  --min-score=N          Exit with code 1 if the overall score is below N (0-100).
+                         Composable with --fail-on -- either condition can fail
+                         the gate. Off by default.
   --help                 Show this help
 `);
         process.exit(0);
@@ -144,6 +158,16 @@ Options:
         }
     } catch {
         console.error(`"${url}" doesn't look like a valid http:// or https:// URL. Example: node src/index.js https://example.com`);
+        process.exit(1);
+    }
+
+    if (failOnSeverity && !isValidSeverity(failOnSeverity)) {
+        console.error(`"${failOnSeverity}" isn't a valid --fail-on severity. Use one of: critical, high, medium, low, info.`);
+        process.exit(1);
+    }
+
+    if (minScoreArg && (Number.isNaN(minScore) || minScore < 0 || minScore > 100)) {
+        console.error(`"--min-score=${minScoreArg.split("=")[1]}" must be a number between 0 and 100.`);
         process.exit(1);
     }
 
@@ -262,6 +286,18 @@ Options:
 
     if (options.issues) {
         printIssues(websiteModel);
+    }
+
+    if (failOnSeverity || minScore !== null) {
+        const gate = evaluateQualityGate(score, { failOnSeverity, minScore });
+
+        if (!gate.passed) {
+            console.log("\n========== QUALITY GATE: FAILED ==========");
+            gate.reasons.forEach(reason => console.log(`- ${reason}`));
+            process.exit(1);
+        }
+
+        console.log("\n========== QUALITY GATE: PASSED ==========");
     }
 }
 

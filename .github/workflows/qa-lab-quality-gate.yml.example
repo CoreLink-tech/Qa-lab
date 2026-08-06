@@ -1,0 +1,92 @@
+# Example: use QA-LAB as a CI quality gate for YOUR site.
+#
+# This is a template, not an active workflow -- it has a .example extension
+# so it won't run in QA-LAB's own repo. Copy it into your site's repo as
+# .github/workflows/qa-lab.yml and adjust the TARGET_URL and thresholds.
+#
+# What this does:
+#   1. Scans TARGET_URL with QA-LAB.
+#   2. Fails the build if any "high" or worse finding exists, or the score
+#      drops below 70 -- adjust --fail-on / --min-score to your own bar.
+#   3. Uploads the HTML/JSON reports as a build artifact either way, so a
+#      failing run still leaves something to look at.
+#   4. Runs on push/PR, plus a daily schedule so regressions on a site with
+#      no code changes (e.g. a third-party script breaking, an expired
+#      cert) still get caught.
+
+name: QA-LAB Quality Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * *" # daily at 06:00 UTC
+
+env:
+  TARGET_URL: https://example.com
+
+jobs:
+  qa-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout QA-LAB
+        uses: actions/checkout@v4
+        with:
+          repository: CoreLink-tech/Qa-lab
+          path: qa-lab
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+          cache-dependency-path: qa-lab/package-lock.json
+
+      - name: Install QA-LAB
+        working-directory: qa-lab
+        run: npm ci
+
+      # Reports land in qa-lab/reports/. This step is allowed to fail
+      # (continue-on-error) so the artifact upload below still runs even on
+      # a gate failure -- the job's overall status is set explicitly after.
+      - name: Run QA-LAB scan
+        id: scan
+        working-directory: qa-lab
+        continue-on-error: true
+        run: |
+          node src/index.js "$TARGET_URL" \
+            --html --json \
+            --fail-on=high \
+            --min-score=70 \
+            --no-history
+
+      - name: Upload QA-LAB reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-lab-reports
+          path: qa-lab/reports/
+
+      # Optional: post the result as a PR comment. Requires no extra
+      # secrets beyond the default GITHUB_TOKEN, but is left commented out
+      # since it only makes sense on pull_request events and you may want
+      # to customize the comment body against your own report format.
+      #
+      # - name: Comment on PR
+      #   if: github.event_name == 'pull_request'
+      #   uses: actions/github-script@v7
+      #   with:
+      #     script: |
+      #       const fs = require('fs');
+      #       const report = JSON.parse(fs.readFileSync('qa-lab/reports/report.json', 'utf8'));
+      #       github.rest.issues.createComment({
+      #         issue_number: context.issue.number,
+      #         owner: context.repo.owner,
+      #         repo: context.repo.repo,
+      #         body: `QA-LAB score: ${report.score.score}/100 (${report.score.grade})`
+      #       });
+
+      - name: Fail the build if the quality gate failed
+        if: steps.scan.outcome == 'failure'
+        run: exit 1
