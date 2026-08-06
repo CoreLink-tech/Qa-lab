@@ -1,13 +1,16 @@
 #!/usr/bin/env node
-const { printSummary, printIssues } = require("./terminalReport");
+const { printSummary, printIssues, printHistory, printComparison } = require("./terminalReport");
 const { createWebsiteModel } = require("./models/websiteModel");
 const { crawlSite } = require("./siteCrawler");
 const { normalizePage } = require("./normalizer");
 const generateReport = require("./report");
+const { buildReportData } = require("./reportData");
 const { runRules } = require("./ruleEngine");
 const { calculateScore } = require("./scoring");
 const { generateRecommendations } = require("./recommendations");
 const { checkAssets } = require("./assetChecker");
+const { saveScanToHistory, loadScanHistory, getPreviousFullScan } = require("./scanHistory");
+const { compareScans } = require("./scanComparison");
 
 
 async function main() {
@@ -71,7 +74,10 @@ async function main() {
         executiveSummary: args.includes("--executive-summary"),
         checkAssets: args.includes("--check-assets"),
         ignoreRobots: args.includes("--ignore-robots"),
-        useSitemap: args.includes("--use-sitemap")
+        useSitemap: args.includes("--use-sitemap"),
+        history: args.includes("--history"),
+        compare: args.includes("--compare"),
+        noHistory: args.includes("--no-history")
     };
 
     // If no format flags are given, default to json + html -- unchanged
@@ -103,6 +109,14 @@ Options:
   --executive-summary    Export a condensed executive summary (Markdown)
   --report-category=CAT  Only include findings from one category (e.g.
                          Security, SEO, Accessibility) in generated reports
+  --history              Show past scan results for this site instead of
+                         running a new scan
+  --compare              Run a scan, then compare it against the most
+                         recent previous scan of this site (new/resolved
+                         issues, score change)
+  --no-history           Don't save this scan to history (saved by default --
+                         this is local disk only, no extra requests to the
+                         site being scanned)
   --concurrency=N        Max pages fetched in parallel (default: ${DEFAULT_CONCURRENCY})
   --depth=N              Max link-following depth from the start URL (default: ${DEFAULT_DEPTH})
   --max-pages=N          Safety cap on total pages crawled (default: ${DEFAULT_MAX_PAGES})
@@ -131,6 +145,11 @@ Options:
     } catch {
         console.error(`"${url}" doesn't look like a valid http:// or https:// URL. Example: node src/index.js https://example.com`);
         process.exit(1);
+    }
+
+    if (options.history) {
+        printHistory(loadScanHistory(url), url);
+        process.exit(0);
     }
 
     const { pages: rawPages, truncated, robotsBlockedCount } = await crawlSite(url, {
@@ -217,10 +236,29 @@ Options:
     generateReport(websiteModel, { formats, reportCategory });
 
 
+    // History/comparison always use the full, unfiltered scan data --
+    // independent of --report-category, so a filtered report run doesn't
+    // silently narrow what future --history/--compare calls see.
+    const fullReportData = buildReportData(websiteModel);
+
+    let comparison = null;
+    if (options.compare) {
+        const previousScan = getPreviousFullScan(url, fullReportData.timestamp);
+        comparison = compareScans(previousScan, fullReportData);
+    }
+
+    if (!options.noHistory) {
+        saveScanToHistory(fullReportData);
+    }
+
 
     console.log("\n========== QA COMPLETE ==========");
 
-    printSummary(websiteModel);
+    printSummary(websiteModel, formats);
+
+    if (comparison) {
+        printComparison(comparison);
+    }
 
     if (options.issues) {
         printIssues(websiteModel);

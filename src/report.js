@@ -56,6 +56,8 @@ function generateReport(websiteModel, { formats = ["json", "html"], reportCatego
         fs.writeFileSync(path.join(reportsDir, filename), content);
         console.log(`reports/${filename}`);
     }
+
+    return reportData;
 }
 
 module.exports = generateReport;
