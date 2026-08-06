@@ -27,13 +27,20 @@ test.before(async () => {
         "/b3": page(["/c1"]),
         "/c1": page([]),
         "/disallowed": page([]),
+        "/sitemap-only-page": page([]),
         "/robots.txt": "User-agent: *\nDisallow: /disallowed"
     };
 
+    routes["/sitemap.xml"] = `<?xml version="1.0"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<url><loc>PLACEHOLDER/sitemap-only-page</loc></url>
+</urlset>`;
+
     server = http.createServer((req, res) => {
         if (routes[req.url] !== undefined) {
-            res.writeHead(200, { "Content-Type": "text/html" });
-            res.end(routes[req.url]);
+            const contentType = req.url.endsWith(".xml") ? "application/xml" : "text/html";
+            res.writeHead(200, { "Content-Type": contentType });
+            res.end(routes[req.url].replaceAll("PLACEHOLDER", baseUrl));
             return;
         }
         res.writeHead(404);
@@ -108,4 +115,46 @@ test("each fetched page records its crawl depth", async () => {
     assert.equal(seed.depth, 0);
     assert.equal(level1.depth, 1);
     assert.equal(level2.depth, 2);
+});
+
+test("useSitemap:true folds sitemap-discovered URLs into the depth-1 batch", async () => {
+    const result = await crawlSite(baseUrl + "/", { maxDepth: 1, maxPages: 100, useSitemap: true });
+    // /sitemap-only-page is NOT linked from any crawled page, only listed
+    // in sitemap.xml -- if this shows up, sitemap folding worked.
+    assert.ok(result.pages.some(p => p.url === baseUrl + "/sitemap-only-page"));
+});
+
+test("useSitemap:false (default) never discovers sitemap-only pages", async () => {
+    const result = await crawlSite(baseUrl + "/", { maxDepth: 2, maxPages: 100 });
+    assert.ok(!result.pages.some(p => p.url === baseUrl + "/sitemap-only-page"));
+});
+
+test("excludePatterns prevents matching links from being crawled", async () => {
+    const result = await crawlSite(baseUrl + "/", {
+        maxDepth: 1, maxPages: 100,
+        excludePatterns: [/\/a2$/]
+    });
+    const urls = result.pages.map(p => p.url);
+    assert.ok(!urls.includes(baseUrl + "/a2"));
+    assert.ok(urls.includes(baseUrl + "/a1"));
+});
+
+test("includePatterns restricts crawling to only matching links", async () => {
+    const result = await crawlSite(baseUrl + "/", {
+        maxDepth: 1, maxPages: 100,
+        includePatterns: [/\/a1$/]
+    });
+    const urls = result.pages.map(p => p.url);
+    assert.ok(urls.includes(baseUrl + "/a1"));
+    assert.ok(!urls.includes(baseUrl + "/a2"));
+});
+
+test("exclude takes precedence when a path matches both include and exclude", async () => {
+    const result = await crawlSite(baseUrl + "/", {
+        maxDepth: 1, maxPages: 100,
+        includePatterns: [/\/a1$/],
+        excludePatterns: [/\/a1$/]
+    });
+    const urls = result.pages.map(p => p.url);
+    assert.ok(!urls.includes(baseUrl + "/a1"));
 });

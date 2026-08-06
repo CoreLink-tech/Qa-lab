@@ -37,6 +37,24 @@ async function main() {
     const delayArg = args.find(arg => arg.startsWith("--delay="));
     const delayMs = delayArg ? Math.max(0, parseInt(delayArg.split("=")[1], 10) || 0) : 0;
 
+    function compileRegexFlags(flagPrefix) {
+        return args
+            .filter(arg => arg.startsWith(flagPrefix))
+            .map(arg => arg.slice(flagPrefix.length))
+            .map(pattern => {
+                try {
+                    return new RegExp(pattern);
+                } catch {
+                    console.error(`Ignoring invalid pattern for ${flagPrefix}: ${pattern}`);
+                    return null;
+                }
+            })
+            .filter(Boolean);
+    }
+
+    const includePatterns = compileRegexFlags("--include=");
+    const excludePatterns = compileRegexFlags("--exclude=");
+
     const options = {
         summary: args.includes("--summary"),
         issues: args.includes("--issues"),
@@ -46,7 +64,8 @@ async function main() {
         json: args.includes("--json"),
         html: args.includes("--html"),
         checkAssets: args.includes("--check-assets"),
-        ignoreRobots: args.includes("--ignore-robots")
+        ignoreRobots: args.includes("--ignore-robots"),
+        useSitemap: args.includes("--use-sitemap")
     };
 
     if (options.help || !url) {
@@ -68,6 +87,12 @@ Options:
   --max-pages=N          Safety cap on total pages crawled (default: ${DEFAULT_MAX_PAGES})
   --delay=MS             Minimum delay between requests, for politeness (default: 0)
   --ignore-robots        Don't respect robots.txt Disallow rules (respected by default)
+  --use-sitemap          Also discover pages via sitemap.xml (off by default --
+                         a sitemap can list far more pages than natural crawling
+                         would find, changing scan scope and time significantly)
+  --include=REGEX        Only crawl links matching this pattern (repeatable)
+  --exclude=REGEX        Never crawl links matching this pattern (repeatable,
+                         takes precedence over --include on conflicts)
   --check-assets         Fetch every unique script/stylesheet/image site-wide to
                          check for missing, oversized, or duplicate-content assets.
                          Off by default: adds real network requests beyond normal
@@ -77,12 +102,25 @@ Options:
         process.exit(0);
     }
 
+    try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+            throw new Error("not http/https");
+        }
+    } catch {
+        console.error(`"${url}" doesn't look like a valid http:// or https:// URL. Example: node src/index.js https://example.com`);
+        process.exit(1);
+    }
+
     const { pages: rawPages, truncated, robotsBlockedCount } = await crawlSite(url, {
         maxDepth: depth,
         maxPages,
         concurrency,
         respectRobots: !options.ignoreRobots,
-        delayMs
+        delayMs,
+        useSitemap: options.useSitemap,
+        includePatterns,
+        excludePatterns
     });
 
     if (truncated) {
