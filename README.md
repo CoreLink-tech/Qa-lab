@@ -45,6 +45,26 @@ Checks important HTTP security headers including:
 - X-Frame-Options
 - X-Content-Type-Options
 
+Also checks (always on, no extra requests):
+
+- HTTPS enforcement, CSP strength, cookie flags, mixed content, server
+  version disclosure
+- Disclosed database/application errors (SQL syntax errors, stack traces)
+  already present in a fetched page's HTML
+
+Opt-in (`--check-exposed-paths`, makes extra requests against the target):
+
+- Well-known sensitive files (`.env`, `.git/config`, backup files) that
+  are publicly reachable
+- Directory listings left enabled
+- Default admin panel paths (informational only -- not a vulnerability by
+  itself)
+- Missing `security.txt`
+
+This is purely passive: it only reads the response of a fixed list of
+static URLs. It never sends payloads and never attempts to exploit
+anything. Only run it against sites you own or are authorized to test.
+
 ### Performance
 
 - Response time analysis

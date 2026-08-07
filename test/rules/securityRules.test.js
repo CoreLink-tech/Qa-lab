@@ -120,3 +120,45 @@ test("does not flag mixed content when count is zero", () => {
     const model = makeModel([makePage({ headers: goodHeaders, mixedContentCount: 0 })]);
     assert.ok(!ids(rule.run(model)).includes("SEC009"));
 });
+
+test("flags a MySQL syntax error disclosed in the page body", () => {
+    const model = makeModel([makePage({
+        headers: goodHeaders,
+        html: "<html><body>Error: You have an error in your SQL syntax; check the manual</body></html>"
+    })]);
+    const finding = rule.run(model).find(f => f.id === "SEC010");
+    assert.ok(finding);
+    assert.match(finding.details, /MySQL/);
+});
+
+test("flags a PHP fatal error/stack trace disclosed in the page body", () => {
+    const model = makeModel([makePage({
+        headers: goodHeaders,
+        html: "<html><body>Fatal error: Uncaught Error: Call to undefined function foo() in /var/www/app.php on line 42</body></html>"
+    })]);
+    const finding = rule.run(model).find(f => f.id === "SEC010");
+    assert.ok(finding);
+    assert.match(finding.details, /PHP/);
+});
+
+test("flags a Python/Django traceback disclosed in the page body", () => {
+    const model = makeModel([makePage({
+        headers: goodHeaders,
+        html: "<pre>Traceback (most recent call last):\n  File \"views.py\", line 10</pre>"
+    })]);
+    assert.ok(ids(rule.run(model)).includes("SEC010"));
+});
+
+test("does not flag ordinary page content that merely mentions errors", () => {
+    const model = makeModel([makePage({
+        headers: goodHeaders,
+        html: "<html><body><p>If you see an error, please contact support. Warning: check your email for confirmation.</p></body></html>"
+    })]);
+    assert.ok(!ids(rule.run(model)).includes("SEC010"));
+});
+
+test("does not throw when a page has no html at all", () => {
+    const model = makeModel([makePage({ headers: goodHeaders, html: undefined })]);
+    assert.doesNotThrow(() => rule.run(model));
+    assert.ok(!ids(rule.run(model)).includes("SEC010"));
+});

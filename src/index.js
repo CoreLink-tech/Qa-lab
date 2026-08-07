@@ -12,6 +12,7 @@ const { loadRulesWithPlugins } = require("./core/ruleRegistry");
 const { calculateScore } = require("./scoring");
 const { generateRecommendations } = require("./recommendations");
 const { checkAssets } = require("./assetChecker");
+const { checkExposedPaths } = require("./exposedPathsChecker");
 const { saveScanToHistory, loadScanHistory, getPreviousFullScan } = require("./scanHistory");
 const { compareScans } = require("./scanComparison");
 const { evaluateQualityGate, isValidSeverity } = require("./qualityGate");
@@ -95,6 +96,7 @@ async function main() {
         md: args.includes("--md"),
         executiveSummary: args.includes("--executive-summary"),
         checkAssets: args.includes("--check-assets"),
+        checkExposedPaths: args.includes("--check-exposed-paths"),
         ignoreRobots: args.includes("--ignore-robots"),
         useSitemap: args.includes("--use-sitemap"),
         history: args.includes("--history"),
@@ -156,6 +158,15 @@ Options:
                          check for missing, oversized, or duplicate-content assets.
                          Off by default: adds real network requests beyond normal
                          page scanning, against whatever site you're scanning.
+  --check-exposed-paths  Probe a fixed list of well-known sensitive paths (.env,
+                         .git/config, backup files, directory listings, default
+                         admin panels) to see if any are publicly reachable.
+                         Purely passive: only checks response status/content of
+                         static, well-known URLs -- never sends payloads, never
+                         attempts authentication or exploitation of any kind.
+                         Off by default: adds real network requests against
+                         whatever site you're scanning. Only run this against
+                         sites you own or are authorized to test.
   --fail-on=SEVERITY     Exit with code 1 if any finding at or above this severity
                          exists (critical, high, medium, low, or info). Intended
                          for CI quality gates. Reports are still written even on
@@ -260,6 +271,10 @@ Options:
 
     if (options.checkAssets) {
         websiteModel.assetChecks = await checkAssets(websiteModel, { concurrency });
+    }
+
+    if (options.checkExposedPaths) {
+        websiteModel.exposedPathChecks = await checkExposedPaths(websiteModel.url, { concurrency });
     }
 
 

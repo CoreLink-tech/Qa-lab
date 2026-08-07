@@ -4,11 +4,44 @@ const Category = require("../constants/categories");
 
 const SERVER_VERSION_PATTERN = /\/?\d+\.\d+/;
 
+// Purely passive: these are matched against HTML the crawl already fetched,
+// no extra requests. Each pattern is specific enough that a normal page
+// (not actually erroring) shouldn't trigger it -- generic words like
+// "error" or "warning" are deliberately excluded to avoid false positives
+// on ordinary content (form validation messages, blog posts about errors,
+// etc). One match per page is enough to flag it; we don't need to find
+// every occurrence.
+const ERROR_DISCLOSURE_SIGNATURES = [
+    { system: "MySQL", pattern: /you have an error in your sql syntax|mysql_fetch_(array|assoc|row)\(\)|mysqli?_query\(\)/i },
+    { system: "PostgreSQL", pattern: /pg_query\(\)|PostgreSQL query failed|ERROR:\s+syntax error at or near/i },
+    { system: "Oracle DB", pattern: /ORA-\d{5}/ },
+    { system: "SQL Server", pattern: /Unclosed quotation mark after the character string|Microsoft OLE DB Provider for (SQL Server|ODBC Drivers)|System\.Data\.SqlClient\.SqlException/i },
+    { system: "SQLite", pattern: /SQLITE_ERROR|sqlite3\.OperationalError/i },
+    { system: "PHP", pattern: /Fatal error:.*on line \d+|Warning: .*\bin\b.*\bon line \d+|Uncaught (Error|Exception):/ },
+    { system: "Node.js/Express", pattern: /at\s+[\w$.]+\s+\(\/[^)]+\.js:\d+:\d+\)[\s\S]{0,200}at\s+[\w$.]+\s+\(\/[^)]+\.js:\d+:\d+\)/ },
+    { system: "Java", pattern: /java\.lang\.(NullPointerException|ClassNotFoundException|RuntimeException)|at [\w.]+\([\w.]+\.java:\d+\)/ },
+    { system: "Ruby on Rails", pattern: /ActiveRecord::(StatementInvalid|RecordNotFound)|app\/controllers\/[\w_]+\.rb:\d+/ },
+    { system: "Python/Django", pattern: /Traceback \(most recent call last\)|django\.db\.utils\.\w+Error/ }
+];
+
+function detectErrorDisclosure(html) {
+    if (!html) return null;
+
+    for (const { system, pattern } of ERROR_DISCLOSURE_SIGNATURES) {
+        const match = html.match(pattern);
+        if (match) {
+            return { system, match: match[0].slice(0, 120) };
+        }
+    }
+
+    return null;
+}
+
 module.exports = {
     id: "SECURITY",
     name: "Security Headers",
     category: Category.SECURITY,
-    description: "Checks HTTP security headers, HTTPS enforcement, CSP quality, cookie flags, mixed content, and server fingerprinting.",
+    description: "Checks HTTP security headers, HTTPS enforcement, CSP quality, cookie flags, mixed content, server fingerprinting, and disclosed database/application errors.",
     enabled: true,
 
     run(websiteModel) {
@@ -146,6 +179,21 @@ module.exports = {
                     details: `${mixedContentCount} resource(s) are loaded over plain HTTP on an HTTPS page.`,
                     recommendation: "Load all resources (images, scripts, stylesheets) over HTTPS to avoid mixed content warnings and security risks.",
                     documentation: "https://developer.mozilla.org/en-US/docs/Web/Security/Mixed_content"
+                }));
+            }
+
+            const disclosedError = detectErrorDisclosure(page.html);
+
+            if (disclosedError) {
+                findings.push(createFinding({
+                    id: "SEC010",
+                    title: "Database or Application Error Disclosed",
+                    category: Category.SECURITY,
+                    severity: Severity.HIGH,
+                    page: page.url,
+                    details: `Page response contains a ${disclosedError.system} error/stack trace. Matched: "${disclosedError.match}"`,
+                    recommendation: "Disable verbose error output in production (display_errors off, custom error pages, generic 500 responses) so database schema, file paths, and query structure aren't leaked to visitors.",
+                    documentation: "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/08-Testing_for_Error_Handling/01-Testing_For_Improper_Error_Handling"
                 }));
             }
         }
