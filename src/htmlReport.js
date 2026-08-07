@@ -195,3 +195,4 @@ ${rows}
 }
 
 module.exports = generateHTMLReport;
+module.exports.escapeHtml = escapeHtml;
