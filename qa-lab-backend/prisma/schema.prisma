@@ -1,5 +1,12 @@
 generator client {
-  provider = "prisma-client"
+  // "prisma-client-js" (not the newer "prisma-client" generator) because it
+  // emits CommonJS output. The rest of this project -- tsconfig, eslint
+  // (sourceType: commonjs), no "type": "module" in package.json -- is CJS,
+  // and ts-jest's test transform can't handle the newer generator's
+  // ESM-only output (import.meta.url, .js-suffixed imports on .ts files).
+  // nest build tolerates it via a TS compiler transform; ts-jest does not,
+  // so no test touching the database layer could run under that generator.
+  provider = "prisma-client-js"
   output   = "../src/generated/prisma"
 }
 

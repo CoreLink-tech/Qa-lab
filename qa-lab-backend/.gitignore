@@ -54,3 +54,9 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Generated Prisma client -- regenerated from prisma/schema.prisma via
+# `npx prisma generate` (wired into postinstall below). Committing this
+# lets it silently drift from schema.prisma and bloats the repo by
+# thousands of lines per change; it belongs in build output, not source.
+src/generated/
