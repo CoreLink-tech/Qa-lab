@@ -17,6 +17,7 @@ const { compareScans } = require("./scanComparison");
 const { evaluateQualityGate, isValidSeverity } = require("./qualityGate");
 const { sendWebhooks } = require("./webhookNotifier");
 const { generatePRComment } = require("./prComment");
+const { generateDashboard } = require("./dashboardGenerator");
 
 
 async function main() {
@@ -99,7 +100,8 @@ async function main() {
         history: args.includes("--history"),
         compare: args.includes("--compare"),
         noHistory: args.includes("--no-history"),
-        prComment: args.includes("--pr-comment")
+        prComment: args.includes("--pr-comment"),
+        dashboard: args.includes("--dashboard")
     };
 
     // If no format flags are given, default to json + html -- unchanged
@@ -172,6 +174,10 @@ Options:
   --pr-comment           Write reports/pr-comment.md: a short Markdown summary
                          (score, grade, quality gate result if used) suitable
                          for posting as a CI pull request comment.
+  --dashboard            Write reports/dashboard.html: a static page with a
+                         score-over-time chart, built from this site's saved
+                         scan history. Works even with --no-history (uses
+                         whatever history already existed before this scan).
   --help                 Show this help
 `);
         process.exit(0);
@@ -306,6 +312,13 @@ Options:
 
     if (!options.noHistory) {
         saveScanToHistory(fullReportData);
+    }
+
+    if (options.dashboard) {
+        const history = loadScanHistory(url);
+        const dashboardPath = path.join(__dirname, "../reports/dashboard.html");
+        fs.writeFileSync(dashboardPath, generateDashboard(history, url));
+        console.log("reports/dashboard.html");
     }
 
 
