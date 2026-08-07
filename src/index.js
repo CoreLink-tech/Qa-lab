@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+const fs = require("fs");
+const path = require("path");
 const { printSummary, printIssues, printHistory, printComparison } = require("./terminalReport");
 const { createWebsiteModel } = require("./models/websiteModel");
 const { crawlSite } = require("./siteCrawler");
@@ -6,12 +8,15 @@ const { normalizePage } = require("./normalizer");
 const generateReport = require("./report");
 const { buildReportData } = require("./reportData");
 const { runRules } = require("./ruleEngine");
+const { loadRulesWithPlugins } = require("./core/ruleRegistry");
 const { calculateScore } = require("./scoring");
 const { generateRecommendations } = require("./recommendations");
 const { checkAssets } = require("./assetChecker");
 const { saveScanToHistory, loadScanHistory, getPreviousFullScan } = require("./scanHistory");
 const { compareScans } = require("./scanComparison");
 const { evaluateQualityGate, isValidSeverity } = require("./qualityGate");
+const { sendWebhooks } = require("./webhookNotifier");
+const { generatePRComment } = require("./prComment");
 
 
 async function main() {
@@ -59,6 +64,15 @@ async function main() {
     const includePatterns = compileRegexFlags("--include=");
     const excludePatterns = compileRegexFlags("--exclude=");
 
+    function collectFlagValues(flagPrefix) {
+        return args
+            .filter(arg => arg.startsWith(flagPrefix))
+            .map(arg => arg.slice(flagPrefix.length));
+    }
+
+    const rulesDirs = collectFlagValues("--rules-dir=").map(dir => path.resolve(dir));
+    const webhookUrls = collectFlagValues("--webhook=");
+
     const reportCategoryArg = args.find(arg => arg.startsWith("--report-category="));
     const reportCategory = reportCategoryArg ? reportCategoryArg.split("=")[1] : null;
 
@@ -84,7 +98,8 @@ async function main() {
         useSitemap: args.includes("--use-sitemap"),
         history: args.includes("--history"),
         compare: args.includes("--compare"),
-        noHistory: args.includes("--no-history")
+        noHistory: args.includes("--no-history"),
+        prComment: args.includes("--pr-comment")
     };
 
     // If no format flags are given, default to json + html -- unchanged
@@ -146,6 +161,17 @@ Options:
   --min-score=N          Exit with code 1 if the overall score is below N (0-100).
                          Composable with --fail-on -- either condition can fail
                          the gate. Off by default.
+  --rules-dir=PATH       Load additional custom rules from this directory,
+                         alongside the built-in rules (repeatable). Each rule
+                         file follows the same {id, name, category, run()}
+                         shape as a built-in rule.
+  --webhook=URL          POST a JSON scan summary to this URL after the scan
+                         completes (repeatable). Generic JSON payload -- not
+                         a native Slack/Discord integration, which would need
+                         their own specific payload format.
+  --pr-comment           Write reports/pr-comment.md: a short Markdown summary
+                         (score, grade, quality gate result if used) suitable
+                         for posting as a CI pull request comment.
   --help                 Show this help
 `);
         process.exit(0);
@@ -169,6 +195,13 @@ Options:
     if (minScoreArg && (Number.isNaN(minScore) || minScore < 0 || minScore > 100)) {
         console.error(`"--min-score=${minScoreArg.split("=")[1]}" must be a number between 0 and 100.`);
         process.exit(1);
+    }
+
+    for (const dir of rulesDirs) {
+        if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+            console.error(`--rules-dir "${dir}" doesn't exist or isn't a directory.`);
+            process.exit(1);
+        }
     }
 
     if (options.history) {
@@ -227,7 +260,7 @@ Options:
     console.log("Running QA Rules...");
 
 
-    const issues = await runRules(websiteModel);
+    const issues = await runRules(websiteModel, loadRulesWithPlugins(rulesDirs));
 
 
 
@@ -288,9 +321,32 @@ Options:
         printIssues(websiteModel);
     }
 
+    let gate = null;
     if (failOnSeverity || minScore !== null) {
-        const gate = evaluateQualityGate(score, { failOnSeverity, minScore });
+        gate = evaluateQualityGate(score, { failOnSeverity, minScore });
+    }
 
+    // PR comment and webhooks fire regardless of gate pass/fail -- same
+    // reasoning as reports still being written on a failing gate: a CI
+    // consumer needs to know a scan failed, not just silently get nothing.
+    if (options.prComment) {
+        const commentPath = path.join(__dirname, "../reports/pr-comment.md");
+        fs.writeFileSync(commentPath, generatePRComment(fullReportData, gate));
+        console.log("\nreports/pr-comment.md");
+    }
+
+    if (webhookUrls.length > 0) {
+        const results = await sendWebhooks(webhookUrls, fullReportData, gate);
+        results.forEach(result => {
+            console.log(
+                result.success
+                    ? `Webhook delivered: ${result.url}`
+                    : `Webhook failed (${result.url}): ${result.error}`
+            );
+        });
+    }
+
+    if (gate) {
         if (!gate.passed) {
             console.log("\n========== QUALITY GATE: FAILED ==========");
             gate.reasons.forEach(reason => console.log(`- ${reason}`));

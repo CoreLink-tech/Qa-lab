@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("path");
-const { loadRules, validateRule } = require("../../src/core/ruleRegistry");
+const { loadRules, loadRulesWithPlugins, validateRule } = require("../../src/core/ruleRegistry");
 
 test("validateRule accepts a well-formed rule", () => {
     assert.doesNotThrow(() => validateRule(
@@ -45,4 +45,50 @@ test("loadRules() against the REAL src/rules directory loads every rule without 
         assert.ok(rule.id);
         assert.ok(rule.category);
     });
+});
+
+test("loadRulesWithPlugins() with no plugin dirs returns just the built-in rules", () => {
+    const rules = loadRulesWithPlugins([]);
+    assert.ok(rules.length >= 8);
+    assert.ok(!rules.some(r => r.category === "Custom"));
+});
+
+test("loadRulesWithPlugins() merges rules from a single plugin directory", () => {
+    const rules = loadRulesWithPlugins([path.join(__dirname, "../fixtures/rules-plugin-a")]);
+    assert.ok(rules.some(r => r.id === "PLUGIN_A"));
+    assert.ok(rules.some(r => r.id === "SEO")); // built-in rules still present
+});
+
+test("loadRulesWithPlugins() merges rules from multiple plugin directories", () => {
+    const rules = loadRulesWithPlugins([
+        path.join(__dirname, "../fixtures/rules-plugin-a"),
+        path.join(__dirname, "../fixtures/rules-plugin-b")
+    ]);
+    assert.ok(rules.some(r => r.id === "PLUGIN_A"));
+    assert.ok(rules.some(r => r.id === "PLUGIN_B"));
+});
+
+test("loadRulesWithPlugins() skips a plugin rule that collides with an existing id, with a warning, instead of crashing", () => {
+    const originalError = console.error;
+    const warnings = [];
+    console.error = (...args) => warnings.push(args.join(" "));
+
+    let rules;
+    try {
+        rules = loadRulesWithPlugins([path.join(__dirname, "../fixtures/rules-plugin-collision")]);
+    } finally {
+        console.error = originalError;
+    }
+
+    const seoRules = rules.filter(r => r.id === "SEO");
+    assert.equal(seoRules.length, 1);
+    assert.equal(seoRules[0].name, "SEO Rules"); // the real built-in one, not the plugin's
+    assert.ok(warnings.some(w => w.includes("PLUGIN") === false && w.includes("SEO")));
+});
+
+test("loadRulesWithPlugins() throws a clear error when a plugin directory doesn't exist", () => {
+    assert.throws(
+        () => loadRulesWithPlugins([path.join(__dirname, "../fixtures/does-not-exist")]),
+        /Failed to load plugin rules/
+    );
 });
