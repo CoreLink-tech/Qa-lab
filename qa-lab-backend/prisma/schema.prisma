@@ -53,6 +53,7 @@ model User {
 
   memberships     OrganizationMember[]
   refreshTokens   RefreshToken[]
+  apiKeys         ApiKey[]
   auditLogs       AuditLog[]
 
   createdAt       DateTime @default(now())
@@ -69,6 +70,7 @@ model Organization {
 
   members     OrganizationMember[]
   projects    Project[]
+  apiKeys     ApiKey[]
   auditLogs   AuditLog[]
 
   createdAt   DateTime @default(now())
@@ -196,6 +198,45 @@ model RefreshToken {
   @@index([userId])
   @@index([expiresAt])
   @@index([userId, revokedAt])
+}
+
+model ApiKey {
+  id             String    @id @default(uuid())
+  organizationId String
+  createdById    String?
+
+  name           String    // human-readable label, e.g. "CI pipeline"
+
+  // The raw key is shown to the user exactly once at creation and never
+  // stored or displayed again. `prefix` (a short, non-secret slice of
+  // the raw key, e.g. its first 8-12 characters) is stored in plaintext
+  // so the UI can show "Key starting with qalab_live_AbCd..." without
+  // ever needing the full value again. `keyHash` is a hash of the FULL
+  // raw key, checked against on every authenticated request -- same
+  // "never store the raw secret" pattern as RefreshToken.tokenHash.
+  prefix         String
+  keyHash        String    @unique
+
+  scopes         String[]  @default([])
+
+  lastUsedAt     DateTime?
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Nullable + SetNull (not Cascade) on purpose: an API key belongs to
+  // the organization, not to the user who happened to create it. The
+  // key should keep working after that user is deleted, same reasoning
+  // as AuditLog.userId below.
+  createdBy      User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([organizationId, revokedAt])
+  @@index([createdById])
 }
 
 model AuditLog {
