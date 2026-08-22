@@ -1,6 +1,7 @@
 const cheerio = require("cheerio");
 const { parseCookies } = require("./utils/cookieParser");
 const { detectTechnologies } = require("./utils/technologyDetection");
+const { detectErrorDisclosure } = require("./utils/errorDisclosureDetector");
 
 const HEADING_TAGS = ["h1", "h2", "h3", "h4", "h5", "h6"];
 const CSRF_NAME_PATTERN = /csrf|_token|authenticity_token/i;
@@ -116,6 +117,16 @@ function normalizePage(page, html) {
 
     const htmlSize = Buffer.byteLength(html || "", "utf8");
 
+    // Computed here, not in securityRules.js, because this is the last
+    // point in the pipeline where the raw HTML string is guaranteed to
+    // still be in scope. The raw HTML itself is deliberately NOT carried
+    // forward past this point (see the return below) -- for a large
+    // crawl (thousands of pages), retaining every page's full HTML through
+    // normalization and the entire rule-execution phase is the single
+    // biggest driver of peak memory use, and nothing downstream needs the
+    // raw string except this one check.
+    const disclosedError = detectErrorDisclosure(html);
+
     // Real resource lists, not just <a> links -- needed for accurate
     // asset checks and render-blocking-script detection.
     const scripts = $("script").map((i, el) => {
@@ -146,8 +157,14 @@ function normalizePage(page, html) {
         cookieNames: cookies.map(c => c.name)
     });
 
+    // Deliberately excludes the raw `html` field from `page` -- everything
+    // any rule or report needs from it has already been extracted above
+    // (headings, forms, disclosedError, htmlSize, etc). See the comment
+    // on disclosedError for why this matters at scale.
+    const { html: _rawHtml, ...pageWithoutHtml } = page;
+
     return {
-        ...page,
+        ...pageWithoutHtml,
         headings,
         headingSequence,
         images,
@@ -162,7 +179,8 @@ function normalizePage(page, html) {
         scripts,
         stylesheets,
         cookies,
-        technologies
+        technologies,
+        disclosedError
     };
 }
 

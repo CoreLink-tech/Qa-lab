@@ -35,7 +35,8 @@ function makePage(overrides = {}) {
         scripts: [],
         stylesheets: [],
         cookies: [],
-        technologies: []
+        technologies: [],
+        disclosedError: null
     };
 
     return {

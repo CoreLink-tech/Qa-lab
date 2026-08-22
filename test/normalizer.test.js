@@ -146,3 +146,27 @@ test("technologies is an empty array, not an error, when nothing matches", () =>
     const result = normalizePage({ url: "https://example.com/plain" }, "<html><body>plain page</body></html>");
     assert.deepEqual(result.technologies, []);
 });
+
+// Regression coverage for the large-crawl memory fix: normalizePage must
+// not carry the raw HTML string forward on the returned page object, even
+// if the input `page` param already had one (e.g. straight from
+// pageFetcher.js). Retaining it for every page across a multi-thousand-page
+// crawl was the actual cause of OOM crashes on memory-constrained devices.
+test("does not carry the raw html field forward onto the normalized page", () => {
+    const result = normalizePage({ url: "https://example.com/", html: sampleHtml }, sampleHtml);
+    assert.equal(result.html, undefined);
+});
+
+test("computes disclosedError during normalization so rules don't need raw html", () => {
+    const result = normalizePage(
+        { url: "https://example.com/error" },
+        "<html><body>Fatal error: Uncaught Error: boom in /var/www/app.php on line 1</body></html>"
+    );
+    assert.ok(result.disclosedError);
+    assert.equal(result.disclosedError.system, "PHP");
+});
+
+test("disclosedError is null when no error signature is present", () => {
+    const result = normalizePage({ url: "https://example.com/" }, sampleHtml);
+    assert.equal(result.disclosedError, null);
+});
