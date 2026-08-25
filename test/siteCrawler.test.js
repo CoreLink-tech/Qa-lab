@@ -158,3 +158,40 @@ test("exclude takes precedence when a path matches both include and exclude", as
     const urls = result.pages.map(p => p.url);
     assert.ok(!urls.includes(baseUrl + "/a1"));
 });
+
+// Regression coverage for the large-crawl memory fix: onPage lets a caller
+// consume each page as it's fetched instead of the crawler accumulating
+// every page of the whole site into one array held until the end.
+test("onPage is called once per fetched page instead of accumulating into pages", async () => {
+    const seen = [];
+    const result = await crawlSite(baseUrl + "/", {
+        maxDepth: 2, maxPages: 100,
+        onPage: async (page) => { seen.push(page.url); }
+    });
+    assert.equal(result.pages.length, 0);
+    assert.ok(seen.length > 0);
+    assert.ok(seen.includes(baseUrl + "/"));
+    assert.ok(seen.includes(baseUrl + "/a1"));
+});
+
+test("pageCount reflects total pages fetched whether or not onPage is used", async () => {
+    const withCallback = await crawlSite(baseUrl + "/", {
+        maxDepth: 2, maxPages: 100,
+        onPage: async () => {}
+    });
+    const withoutCallback = await crawlSite(baseUrl + "/", {
+        maxDepth: 2, maxPages: 100
+    });
+    assert.equal(withCallback.pageCount, withoutCallback.pageCount);
+    assert.equal(withoutCallback.pageCount, withoutCallback.pages.length);
+});
+
+test("maxPages is still enforced when using onPage", async () => {
+    const seen = [];
+    const result = await crawlSite(baseUrl + "/", {
+        maxDepth: 2, maxPages: 2,
+        onPage: async (page) => { seen.push(page.url); }
+    });
+    assert.ok(seen.length <= 2);
+    assert.equal(result.pageCount, seen.length);
+});

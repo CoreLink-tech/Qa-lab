@@ -11,13 +11,22 @@ module.exports = {
     description: "Checks common HTML form usability, security, and accessibility issues: names, autocomplete, password strength, email typing, form method, CSRF tokens, and file upload restrictions.",
     enabled: true,
 
+    // Kept for backward compatibility (anyone calling .run(model) directly)
+    // -- delegates to runPerPage, the real implementation used by the
+    // streaming pipeline for large crawls.
     run(websiteModel) {
+        const findings = [];
+        for (const page of websiteModel.pages) {
+            findings.push(...this.runPerPage(page));
+        }
+        return findings;
+    },
+
+    runPerPage(page) {
 
         const findings = [];
 
-        for (const page of websiteModel.pages) {
-
-            const fields = page.forms?.fields || [];
+        const fields = page.forms?.fields || [];
             const formsList = page.forms?.list || [];
 
             const missingNameFields = fields.filter(input => !input.name);
@@ -127,7 +136,6 @@ module.exports = {
                     }));
                 }
             }
-        }
 
         return findings;
     }

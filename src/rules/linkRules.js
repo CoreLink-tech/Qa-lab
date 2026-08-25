@@ -10,33 +10,37 @@ module.exports = {
     enabled: true,
 
     run(websiteModel) {
+        const findings = [];
+        for (const page of websiteModel.pages) {
+            findings.push(...this.runPerPage(page));
+        }
+        return findings;
+    },
+
+    runPerPage(page) {
 
         const findings = [];
 
-        for (const page of websiteModel.pages) {
+        if (typeof page.status !== "number") {
+            return findings;
+        }
 
-            if (typeof page.status !== "number") {
-                continue;
-            }
+        if (page.status >= 400) {
 
-            if (page.status >= 400) {
-
-                findings.push(
-                    createFinding({
-                        id: "LINK001",
-                        title: "Broken Link Detected",
-                        category: Category.LINKS,
-                        severity: Severity.HIGH,
-                        page: page.url,
-                        details: `Page returned HTTP ${page.status}.`,
-                        recommendation:
-                            "Verify that the URL exists, correct broken references, or configure proper redirects.",
-                        documentation:
-                            "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status"
-                    })
-                );
-
-            }
+            findings.push(
+                createFinding({
+                    id: "LINK001",
+                    title: "Broken Link Detected",
+                    category: Category.LINKS,
+                    severity: Severity.HIGH,
+                    page: page.url,
+                    details: `Page returned HTTP ${page.status}.`,
+                    recommendation:
+                        "Verify that the URL exists, correct broken references, or configure proper redirects.",
+                    documentation:
+                        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status"
+                })
+            );
 
         }
 

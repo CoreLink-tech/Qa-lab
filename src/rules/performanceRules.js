@@ -14,12 +14,18 @@ module.exports = {
     enabled: true,
 
     run(websiteModel) {
+        const findings = [];
+        for (const page of websiteModel.pages) {
+            findings.push(...this.runPerPage(page));
+        }
+        return findings;
+    },
+
+    runPerPage(page) {
 
         const findings = [];
 
-        for (const page of websiteModel.pages) {
-
-            const responseTime = page.responseTime;
+        const responseTime = page.responseTime;
 
             if (typeof responseTime === "number") {
 
@@ -106,7 +112,6 @@ module.exports = {
                     documentation: "https://web.dev/articles/render-blocking-resources"
                 }));
             }
-        }
 
         return findings;
     }

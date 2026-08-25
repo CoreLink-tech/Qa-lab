@@ -25,57 +25,76 @@ module.exports = {
     // Retired now that the website model captures real script/stylesheet
     // resources (see normalizer.js), replaced with checks that are
     // actually reliable.
+    // Kept for backward compatibility -- delegates to runPerPage +
+    // runFinal, the real implementation used by the streaming pipeline.
     run(websiteModel) {
+        const findings = [];
+        for (const page of websiteModel.pages) {
+            findings.push(...this.runPerPage(page));
+        }
+        findings.push(...this.runFinal([], { assetChecks: websiteModel.assetChecks }));
+        return findings;
+    },
+
+    runPerPage(page) {
 
         const findings = [];
 
-        for (const page of websiteModel.pages) {
+        const scriptSrcs = (page.scripts || [])
+            .map(s => s.src)
+            .filter(Boolean);
 
-            const scriptSrcs = (page.scripts || [])
-                .map(s => s.src)
-                .filter(Boolean);
+        const duplicateScripts = findDuplicates(scriptSrcs);
 
-            const duplicateScripts = findDuplicates(scriptSrcs);
-
-            if (duplicateScripts.length > 0) {
-                findings.push(createFinding({
-                    id: "AST002",
-                    title: "Script Loaded Multiple Times",
-                    category: Category.ASSETS,
-                    severity: Severity.LOW,
-                    page: page.url,
-                    details: `${duplicateScripts.length} script URL(s) are referenced more than once: ${duplicateScripts.map(([url]) => url).join(", ")}`,
-                    recommendation: "Include each script only once per page to avoid redundant downloads and potential re-initialization bugs."
-                }));
-            }
-
-            const stylesheetHrefs = (page.stylesheets || [])
-                .map(s => s.href)
-                .filter(Boolean);
-
-            const duplicateStylesheets = findDuplicates(stylesheetHrefs);
-
-            if (duplicateStylesheets.length > 0) {
-                findings.push(createFinding({
-                    id: "AST003",
-                    title: "Stylesheet Loaded Multiple Times",
-                    category: Category.ASSETS,
-                    severity: Severity.LOW,
-                    page: page.url,
-                    details: `${duplicateStylesheets.length} stylesheet URL(s) are referenced more than once: ${duplicateStylesheets.map(([url]) => url).join(", ")}`,
-                    recommendation: "Include each stylesheet only once per page to avoid redundant downloads and CSS ordering issues."
-                }));
-            }
+        if (duplicateScripts.length > 0) {
+            findings.push(createFinding({
+                id: "AST002",
+                title: "Script Loaded Multiple Times",
+                category: Category.ASSETS,
+                severity: Severity.LOW,
+                page: page.url,
+                details: `${duplicateScripts.length} script URL(s) are referenced more than once: ${duplicateScripts.map(([url]) => url).join(", ")}`,
+                recommendation: "Include each script only once per page to avoid redundant downloads and potential re-initialization bugs."
+            }));
         }
 
-        // Site-wide asset checks: only run when the (opt-in, --check-assets)
-        // fetch stage actually populated this. Rules themselves never do
-        // network I/O -- this is precomputed data handed to them.
-        if (websiteModel.assetChecks) {
+        const stylesheetHrefs = (page.stylesheets || [])
+            .map(s => s.href)
+            .filter(Boolean);
+
+        const duplicateStylesheets = findDuplicates(stylesheetHrefs);
+
+        if (duplicateStylesheets.length > 0) {
+            findings.push(createFinding({
+                id: "AST003",
+                title: "Stylesheet Loaded Multiple Times",
+                category: Category.ASSETS,
+                severity: Severity.LOW,
+                page: page.url,
+                details: `${duplicateStylesheets.length} stylesheet URL(s) are referenced more than once: ${duplicateStylesheets.map(([url]) => url).join(", ")}`,
+                recommendation: "Include each stylesheet only once per page to avoid redundant downloads and CSS ordering issues."
+            }));
+        }
+
+        return findings;
+    },
+
+    // Site-wide asset checks: only run when the (opt-in, --check-assets)
+    // fetch stage actually populated siteContext.assetChecks. Rules
+    // themselves never do network I/O -- this is precomputed data handed
+    // to them. `summaries` is unused (this rule has no collectSummary):
+    // assetChecks is already a small, site-level structure keyed by unique
+    // asset URL, not per-page data, so it doesn't need to scale with page
+    // count the way a real cross-page summary list would.
+    runFinal(summaries, siteContext) {
+
+        const findings = [];
+
+        if (siteContext.assetChecks) {
 
             const byHash = new Map();
 
-            for (const [url, result] of Object.entries(websiteModel.assetChecks)) {
+            for (const [url, result] of Object.entries(siteContext.assetChecks)) {
 
                 if (result.error || (result.status && result.status >= 400)) {
                     findings.push(createFinding({

@@ -15,11 +15,20 @@ module.exports = {
     description: "Checks for common accessibility issues: missing alt text, skipped heading levels, unlabeled form fields, and missing language attributes.",
     enabled: true,
 
+    // Kept for backward compatibility (anyone calling .run(model) directly,
+    // e.g. with a small in-memory model) -- delegates to runPerPage, the
+    // real implementation used by the streaming pipeline for large crawls.
     run(websiteModel) {
-
         const findings = [];
-
         for (const page of websiteModel.pages) {
+            findings.push(...this.runPerPage(page));
+        }
+        return findings;
+    },
+
+    runPerPage(page) {
+
+            const findings = [];
 
             const missingAlt = page.images?.missingAlt || 0;
 
@@ -96,8 +105,7 @@ module.exports = {
                     documentation: "https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/lang"
                 }));
             }
-        }
 
-        return findings;
+            return findings;
     }
 };

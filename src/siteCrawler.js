@@ -29,7 +29,19 @@ async function crawlSite(startUrl, options = {}) {
         delayMs = 0,
         useSitemap = false,
         includePatterns = [],
-        excludePatterns = []
+        excludePatterns = [],
+        // Optional. When provided, each fetched page is handed to this
+        // callback as soon as it's fetched, instead of being accumulated
+        // into the `pages` array returned at the end. This is what lets a
+        // caller (index.js) normalize + rule-check + report-write each
+        // page and then let it be garbage collected, rather than holding
+        // every page of the whole crawl in memory simultaneously -- the
+        // root cause of OOM crashes on large sites. `pages` stays empty
+        // in this mode; `pageCount` is tracked either way. Note: only ONE
+        // level's worth of pages (fetchedLevel) is ever held at once
+        // regardless of this option -- that part of the crawler was
+        // already bounded per-level, not per-site.
+        onPage = null
     } = options;
 
     // Sitemap discovery can use robots.txt's Sitemap: directive, so fetch
@@ -51,13 +63,14 @@ async function crawlSite(startUrl, options = {}) {
 
     const visited = new Set([startPath]);
     const pages = [];
+    let pageCount = 0;
     let currentLevel = [{ url: startUrl, depth: 0 }];
     let truncated = false;
     let robotsBlockedCount = 0;
 
-    while (currentLevel.length > 0 && pages.length < maxPages) {
+    while (currentLevel.length > 0 && pageCount < maxPages) {
 
-        const remainingBudget = maxPages - pages.length;
+        const remainingBudget = maxPages - pageCount;
         const levelToFetch = currentLevel.slice(0, remainingBudget);
 
         if (levelToFetch.length < currentLevel.length) {
@@ -72,7 +85,15 @@ async function crawlSite(startUrl, options = {}) {
             return { ...page, depth: item.depth };
         });
 
-        pages.push(...fetchedLevel);
+        pageCount += fetchedLevel.length;
+
+        if (onPage) {
+            for (const page of fetchedLevel) {
+                await onPage(page);
+            }
+        } else {
+            pages.push(...fetchedLevel);
+        }
 
         const nextLevel = [];
 
@@ -120,7 +141,7 @@ async function crawlSite(startUrl, options = {}) {
         truncated = true;
     }
 
-    return { pages, truncated, robotsBlockedCount };
+    return { pages, pageCount, truncated, robotsBlockedCount };
 }
 
 module.exports = { crawlSite };

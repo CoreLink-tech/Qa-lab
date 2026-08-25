@@ -1,10 +1,10 @@
-function printSummary(websiteModel, formats = []) {
+function printSummary(websiteModel, formats = [], pageCount = websiteModel.pages.length) {
     console.log("\n========== QA SUMMARY ==========\n");
 
     console.log(`Website       : ${websiteModel.url}`);
     console.log(`Score         : ${websiteModel.score.score}/100`);
     console.log(`Grade         : ${websiteModel.score.grade}`);
-    console.log(`Pages Scanned : ${websiteModel.pages.length}`);
+    console.log(`Pages Scanned : ${pageCount}`);
     console.log(`Issues Found  : ${websiteModel.findings.length}`);
 
     const counts = {

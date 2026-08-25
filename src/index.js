@@ -7,7 +7,8 @@ const { crawlSite } = require("./siteCrawler");
 const { normalizePage } = require("./normalizer");
 const generateReport = require("./report");
 const { buildReportData } = require("./reportData");
-const { runRules } = require("./ruleEngine");
+const { runPerPageRules, collectSummaries, runFinalRules } = require("./ruleEngine");
+const { createJsonReportWriter } = require("./jsonReportWriter");
 const { loadRulesWithPlugins } = require("./core/ruleRegistry");
 const { calculateScore } = require("./scoring");
 const { generateRecommendations } = require("./recommendations");
@@ -226,7 +227,47 @@ Options:
         process.exit(0);
     }
 
-    const { pages: rawPages, truncated, robotsBlockedCount } = await crawlSite(url, {
+    // --- Streaming pipeline ---------------------------------------------
+    //
+    // Every page is normalized, rule-checked, and (for the JSON report)
+    // written to disk as soon as it's fetched, then discarded -- instead
+    // of crawling the whole site into memory first and only THEN running
+    // rules/writing reports. On a 1500+ page real-world crawl this was the
+    // difference between an OOM crash and a clean run: holding every
+    // page's full normalized data (headings/forms/links/scripts/
+    // technologies) simultaneously for the whole rule-execution + report
+    // phase was the dominant remaining cost even after raw HTML was
+    // already stripped during normalization (see normalizer.js).
+    //
+    // Only small things survive the whole run: findings (one small object
+    // per issue, not per page), each rule's own accumulated summaries
+    // (currently just SEO's {url, title, description} for duplicate
+    // detection), and -- only when --check-assets is used -- a lightweight
+    // {url, scripts, stylesheets, images} extract per page (still far
+    // smaller than a full normalized page).
+    const rules = loadRulesWithPlugins(rulesDirs);
+    const websiteModel = createWebsiteModel(url);
+    const siteContext = { url };
+
+    const reportsDir = path.join(__dirname, "../reports");
+    if (!fs.existsSync(reportsDir)) {
+        fs.mkdirSync(reportsDir, { recursive: true });
+    }
+
+    const jsonWriter = formats.includes("json")
+        ? createJsonReportWriter(path.join(reportsDir, "report.json"), {
+            schemaVersion: websiteModel.schemaVersion,
+            url: websiteModel.url,
+            timestamp: websiteModel.timestamp
+        })
+        : null;
+
+    let pageCount = 0;
+    const allFindings = [];
+    const summaries = {};
+    const assetSourcePages = options.checkAssets ? [] : null;
+
+    const { truncated, robotsBlockedCount } = await crawlSite(url, {
         maxDepth: depth,
         maxPages,
         concurrency,
@@ -234,8 +275,44 @@ Options:
         delayMs,
         useSitemap: options.useSitemap,
         includePatterns,
-        excludePatterns
+        excludePatterns,
+        onPage: async (rawPage) => {
+            const page = normalizePage(rawPage, rawPage.html || "");
+            pageCount++;
+
+            const pageFindings = await runPerPageRules(page, rules, siteContext);
+            allFindings.push(...pageFindings);
+            collectSummaries(page, rules, summaries);
+
+            if (jsonWriter) jsonWriter.writePage(page);
+
+            // --check-assets needs every page's script/stylesheet/image
+            // references to build its site-wide unique-asset list
+            // (assetChecker.js), but not the rest of the page -- so only
+            // these four small fields are kept, not the full page object.
+            if (assetSourcePages) {
+                assetSourcePages.push({
+                    url: page.url,
+                    scripts: page.scripts,
+                    stylesheets: page.stylesheets,
+                    images: page.images
+                });
+            }
+
+            if (options.verbose) {
+                console.log("--------------------------------------");
+                console.log(`Page : ${page.url}`);
+                console.log(`Depth : ${page.depth}`);
+                console.log(`Status : ${page.status}`);
+                console.log(`Response Time : ${page.responseTime} ms`);
+                console.log(`Title : ${page.title}`);
+            }
+        }
     });
+
+    if (options.verbose) {
+        console.log("\n========== PAGES SCANNED ==========\n");
+    }
 
     if (truncated) {
         console.log(`Crawl stopped early: hit the ${maxPages}-page limit before the site was fully crawled. Use --max-pages to raise it.`);
@@ -245,74 +322,62 @@ Options:
         console.log(`Skipped ${robotsBlockedCount} link(s) disallowed by robots.txt. Use --ignore-robots to crawl them anyway.`);
     }
 
-    const pages = rawPages.map(page => normalizePage(page, page.html || ""));
-
-    if (options.verbose) {
-        console.log("\n========== PAGES SCANNED ==========\n");
-        pages.forEach(page => {
-            console.log("--------------------------------------");
-            console.log(`Page : ${page.url}`);
-            console.log(`Depth : ${page.depth}`);
-            console.log(`Status : ${page.status}`);
-            console.log(`Response Time : ${page.responseTime} ms`);
-            console.log(`Title : ${page.title}`);
-        });
-    }
-
-
-    // Website Data Model
-
-    const websiteModel = createWebsiteModel(url);
-
-    websiteModel.pages = pages;
-    websiteModel.totalPages = pages.length;
-    websiteModel.summary.pagesScanned = pages.length;
-
-
     if (options.checkAssets) {
-        websiteModel.assetChecks = await checkAssets(websiteModel, { concurrency });
+        siteContext.assetChecks = await checkAssets({ pages: assetSourcePages }, { concurrency });
     }
 
     if (options.checkExposedPaths) {
-        websiteModel.exposedPathChecks = await checkExposedPaths(websiteModel.url, { concurrency });
+        siteContext.exposedPathChecks = await checkExposedPaths(url, { concurrency });
     }
 
+    console.log("Running QA Rules (final pass)...");
 
-    console.log("Running QA Rules...");
-
-
-    const issues = await runRules(websiteModel, loadRulesWithPlugins(rulesDirs));
-
-
+    const finalFindings = await runFinalRules(rules, summaries, siteContext);
+    allFindings.push(...finalFindings);
 
     console.log("Generating Recommendations...");
 
-
-    const recommendations = generateRecommendations(issues);
-
-
+    const recommendations = generateRecommendations(allFindings);
 
     console.log("Calculating Score...");
 
+    const score = calculateScore(allFindings);
 
-    const score = calculateScore(issues);
-
-
-
+    // websiteModel.pages is deliberately left empty here -- the JSON
+    // report already has full per-page detail (streamed above), and
+    // nothing else (HTML/CSV/MD/executive-summary reports, history,
+    // comparison, webhooks, PR comments, the quality gate, scoring, or
+    // recommendations) ever reads websiteModel.pages. Verified by
+    // checking every consumer before making this change.
+    websiteModel.totalPages = pageCount;
     websiteModel.score = score;
-
-    websiteModel.findings = issues;
-
+    websiteModel.findings = allFindings;
     websiteModel.recommendations = recommendations;
+    websiteModel.summary.pagesScanned = pageCount;
+    websiteModel.summary.issuesFound = allFindings.length;
 
-    websiteModel.summary.issuesFound = issues.length;
+    if (jsonWriter) {
+        const jsonFindings = reportCategory
+            ? allFindings.filter(f => f.category === reportCategory)
+            : allFindings;
+        const jsonRecommendations = reportCategory
+            ? recommendations.filter(r => r.category === reportCategory)
+            : recommendations;
 
+        await jsonWriter.finalize({
+            score,
+            summary: { ...websiteModel.summary, issuesFound: jsonFindings.length },
+            findings: jsonFindings,
+            recommendations: jsonRecommendations
+        });
+        console.log("\nReports generated:");
+        console.log("reports/report.json");
+    }
 
-
-    // Generate HTML + JSON Report
-
-    generateReport(websiteModel, { formats, reportCategory });
-
+    const otherFormats = formats.filter(f => f !== "json");
+    if (otherFormats.length > 0) {
+        generateReport(websiteModel, { formats: otherFormats, reportCategory });
+    }
 
     // History/comparison always use the full, unfiltered scan data --
     // independent of --report-category, so a filtered report run doesn't
@@ -339,7 +404,7 @@ Options:
 
     console.log("\n========== QA COMPLETE ==========");
 
-    printSummary(websiteModel, formats);
+    printSummary(websiteModel, formats, pageCount);
 
     if (comparison) {
         printComparison(comparison);

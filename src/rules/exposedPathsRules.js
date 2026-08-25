@@ -18,12 +18,27 @@ module.exports = {
     // websiteModel.exposedPathChecks is populated by exposedPathsChecker.js
     // when --check-exposed-paths is passed; absent otherwise, in which case
     // this rule has nothing to report (not an error).
+    //
+    // Kept for backward compatibility -- delegates to runFinal, the real
+    // implementation used by the streaming pipeline.
     run(websiteModel) {
-        const checks = websiteModel.exposedPathChecks;
+        return this.runFinal([], {
+            exposedPathChecks: websiteModel.exposedPathChecks,
+            url: websiteModel.url
+        });
+    },
+
+    // This rule has no per-page component at all -- it only ever reads
+    // exposedPathChecks (a small, separate structure built once by
+    // exposedPathsChecker.js, unrelated to page count) and the site's base
+    // URL. `summaries` is unused, kept only so the signature matches every
+    // other rule's runFinal contract.
+    runFinal(summaries, siteContext) {
+        const checks = siteContext.exposedPathChecks;
         if (!checks) return [];
 
         const findings = [];
-        const baseUrl = websiteModel.url;
+        const baseUrl = siteContext.url;
 
         for (const item of checks.exposed || []) {
             const url = new URL(item.path, baseUrl).href;

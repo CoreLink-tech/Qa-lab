@@ -11,28 +11,37 @@ module.exports = {
     description: "Checks HTTP security headers, HTTPS enforcement, CSP quality, cookie flags, mixed content, server fingerprinting, and disclosed database/application errors.",
     enabled: true,
 
+    // Kept for backward compatibility (anyone calling .run(model) directly)
+    // -- delegates to runPerPage, the real implementation used by the
+    // streaming pipeline for large crawls.
     run(websiteModel) {
+        const findings = [];
+        for (const page of websiteModel.pages) {
+            findings.push(...this.runPerPage(page));
+        }
+        return findings;
+    },
+
+    runPerPage(page) {
 
         const findings = [];
 
-        for (const page of websiteModel.pages) {
+        if (page.url && page.url.startsWith("http://")) {
+            findings.push(createFinding({
+                id: "SEC005",
+                title: "Site Not Served Over HTTPS",
+                category: Category.SECURITY,
+                severity: Severity.HIGH,
+                page: page.url,
+                details: "Page was loaded over plain HTTP instead of HTTPS.",
+                recommendation: "Serve all traffic over HTTPS and redirect HTTP requests to HTTPS.",
+                documentation: "https://developer.mozilla.org/en-US/docs/Web/Security/Transport_Layer_Security"
+            }));
+        }
 
-            if (page.url && page.url.startsWith("http://")) {
-                findings.push(createFinding({
-                    id: "SEC005",
-                    title: "Site Not Served Over HTTPS",
-                    category: Category.SECURITY,
-                    severity: Severity.HIGH,
-                    page: page.url,
-                    details: "Page was loaded over plain HTTP instead of HTTPS.",
-                    recommendation: "Serve all traffic over HTTPS and redirect HTTP requests to HTTPS.",
-                    documentation: "https://developer.mozilla.org/en-US/docs/Web/Security/Transport_Layer_Security"
-                }));
-            }
+        if (!page.headers) return findings;
 
-            if (!page.headers) continue;
-
-            const headers = page.headers;
+        const headers = page.headers;
 
             if (!headers["content-security-policy"]) {
                 findings.push(createFinding({
@@ -167,7 +176,6 @@ module.exports = {
                     documentation: "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/08-Testing_for_Error_Handling/01-Testing_For_Improper_Error_Handling"
                 }));
             }
-        }
 
         return findings;
     }
