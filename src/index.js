@@ -12,6 +12,7 @@ const { createJsonReportWriter } = require("./jsonReportWriter");
 const { loadRulesWithPlugins } = require("./core/ruleRegistry");
 const { calculateScore } = require("./scoring");
 const { generateRecommendations } = require("./recommendations");
+const { aggregateFindings } = require("./findingAggregator");
 const { checkAssets } = require("./assetChecker");
 const { checkExposedPaths } = require("./exposedPathsChecker");
 const { saveScanToHistory, loadScanHistory, getPreviousFullScan } = require("./scanHistory");
@@ -335,9 +336,20 @@ Options:
     const finalFindings = await runFinalRules(rules, summaries, siteContext);
     allFindings.push(...finalFindings);
 
+    console.log("Aggregating Findings...");
+
+    // Every rule emits one finding per occurrence (one per page, per
+    // broken asset, etc.) -- correct for rules, but not what a human
+    // wants to read: a header missing on 48 pages should show up as one
+    // issue affecting 48 pages, not 48 near-identical rows. This is the
+    // aggregated view used for every display-facing report and for
+    // scoring's breadth calculation. It is NOT what gets stored for
+    // history/--compare -- see the websiteModel.findings comment below.
+    const aggregatedFindings = aggregateFindings(allFindings);
+
     console.log("Generating Recommendations...");
 
-    const recommendations = generateRecommendations(allFindings);
+    const recommendations = generateRecommendations(aggregatedFindings);
 
     console.log("Calculating Score...");
 
@@ -349,17 +361,30 @@ Options:
     // comparison, webhooks, PR comments, the quality gate, scoring, or
     // recommendations) ever reads websiteModel.pages. Verified by
     // checking every consumer before making this change.
+    //
+    // websiteModel.findings is deliberately the RAW (non-aggregated)
+    // findings, not aggregatedFindings -- scanComparison.js matches on
+    // id + page to tell you "this exact issue on this exact page was
+    // fixed", which needs per-page granularity. Aggregating here would
+    // silently coarsen --compare from "8 of 48 pages still have this"
+    // down to a meaningless "still exists somewhere" binary. Only the
+    // DISPLAY reports (JSON/HTML/CSV/MD/executive/terminal, below) use
+    // the aggregated view.
     websiteModel.totalPages = pageCount;
     websiteModel.score = score;
     websiteModel.findings = allFindings;
     websiteModel.recommendations = recommendations;
     websiteModel.summary.pagesScanned = pageCount;
-    websiteModel.summary.issuesFound = allFindings.length;
+    // Unique issue-type count, not raw occurrence count -- matches the
+    // aggregated findings shown everywhere else (score's severity tally,
+    // the reports, the history table). "48 occurrences of one issue"
+    // should read as 1 issue found, same as it would to a human.
+    websiteModel.summary.issuesFound = aggregatedFindings.length;
 
     if (jsonWriter) {
         const jsonFindings = reportCategory
-            ? allFindings.filter(f => f.category === reportCategory)
-            : allFindings;
+            ? aggregatedFindings.filter(f => f.category === reportCategory)
+            : aggregatedFindings;
         const jsonRecommendations = reportCategory
             ? recommendations.filter(r => r.category === reportCategory)
             : recommendations;
@@ -374,9 +399,16 @@ Options:
         console.log("reports/report.json");
     }
 
+    // A display-only model: findings/recommendations swapped for the
+    // aggregated view, used for every human-facing output (report files
+    // and the terminal summary below). websiteModel itself (used for
+    // history/--compare) keeps the raw findings untouched -- see the
+    // comment above websiteModel.findings for why.
+    const displayModel = { ...websiteModel, findings: aggregatedFindings, recommendations };
+
     const otherFormats = formats.filter(f => f !== "json");
     if (otherFormats.length > 0) {
-        generateReport(websiteModel, { formats: otherFormats, reportCategory });
+        generateReport(displayModel, { formats: otherFormats, reportCategory });
     }
 
     // History/comparison always use the full, unfiltered scan data --
@@ -404,14 +436,14 @@ Options:
 
     console.log("\n========== QA COMPLETE ==========");
 
-    printSummary(websiteModel, formats, pageCount);
+    printSummary(displayModel, formats, pageCount);
 
     if (comparison) {
         printComparison(comparison);
     }
 
     if (options.issues) {
-        printIssues(websiteModel);
+        printIssues(displayModel);
     }
 
     let gate = null;

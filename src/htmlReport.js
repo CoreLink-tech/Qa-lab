@@ -24,14 +24,30 @@ function generateHTMLReport(data) {
     // Finding details/titles can echo content scraped from the target
     // site (e.g. a page title). Escape everything before it goes into
     // the HTML report to avoid stored XSS when someone opens the report.
-    const rows = findings.map(issue => `
+    //
+    // `findings` here is already aggregated (one row per unique issue
+    // TYPE, not one row per page it was found on -- see
+    // findingAggregator.js) by the time this report is built, so a
+    // header missing on 48 pages is one row showing "48 pages", not 48
+    // near-identical rows.
+    const rows = findings.map(group => {
+        const pageCount = group.affectedPageCount || 0;
+        const pageLabel = pageCount === 1 ? "1 page" : `${pageCount} pages`;
+        const exampleUrls = (group.examples || []).map(e => e.page).filter(Boolean);
+        const remaining = pageCount - exampleUrls.length;
+        const examplesText = exampleUrls.length
+            ? exampleUrls.join(", ") + (remaining > 0 ? ` (+${remaining} more)` : "")
+            : "-";
+
+        return `
 <tr>
-<td>${escapeHtml(issue.title || "-")}</td>
-<td>${escapeHtml(issue.severity || "-")}</td>
-<td>${escapeHtml(issue.page || "-")}</td>
-<td>${escapeHtml(issue.details || "-")}</td>
+<td>${escapeHtml(group.title || "-")}</td>
+<td>${escapeHtml(group.severity || "-")}</td>
+<td>${escapeHtml(pageLabel)}</td>
+<td>${escapeHtml(examplesText)}</td>
 </tr>
-`).join("");
+`;
+    }).join("");
 
     return `
 
@@ -176,8 +192,8 @@ Grade: <strong>${grade}</strong>
 <tr>
 <th>Issue</th>
 <th>Severity</th>
-<th>Page</th>
-<th>Details</th>
+<th>Affected Pages</th>
+<th>Examples</th>
 </tr>
 
 ${rows}

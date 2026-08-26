@@ -12,16 +12,19 @@ function escapeCsvField(value) {
 }
 
 function generateCSVReport(reportData) {
-    const headers = ["ID", "Title", "Category", "Severity", "Page", "Details", "Recommendation"];
+    const headers = ["ID", "Title", "Category", "Severity", "Affected Pages", "Example Pages", "Recommendation"];
 
-    const rows = (reportData.findings || []).map(finding => [
-        finding.id,
-        finding.title,
-        finding.category,
-        finding.severity,
-        finding.page,
-        finding.details,
-        finding.recommendation
+    // reportData.findings is already aggregated (one row per unique issue
+    // TYPE -- see findingAggregator.js), so a header missing on 48 pages
+    // is one CSV row with "Affected Pages: 48", not 48 identical rows.
+    const rows = (reportData.findings || []).map(group => [
+        group.id,
+        group.title,
+        group.category,
+        group.severity,
+        group.affectedPageCount,
+        (group.examples || []).map(e => e.page).filter(Boolean).join("; "),
+        group.recommendation
     ]);
 
     const lines = [headers, ...rows].map(row => row.map(escapeCsvField).join(","));

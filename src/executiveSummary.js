@@ -29,8 +29,13 @@ function generateExecutiveSummary(reportData) {
     lines.push("");
 
     if (topIssues.length > 0) {
-        topIssues.forEach(finding => {
-            lines.push(`- **[${finding.severity}] ${escapeMarkdown(finding.title)}** on ${escapeMarkdown(finding.page)}`);
+        // findings is already aggregated (one entry per unique issue TYPE
+        // -- see findingAggregator.js), so this lists distinct problems,
+        // not one bullet per page each was found on.
+        topIssues.forEach(group => {
+            const pageCount = group.affectedPageCount || 0;
+            const pageLabel = pageCount === 1 ? "1 page" : `${pageCount} pages`;
+            lines.push(`- **[${group.severity}] ${escapeMarkdown(group.title)}** — ${pageLabel} affected`);
         });
     } else {
         lines.push("No critical or high-severity issues found.");

@@ -56,11 +56,22 @@ function printIssues(websiteModel) {
         return;
     }
 
-    websiteModel.findings.forEach((issue, index) => {
-        console.log(`${index + 1}. ${issue.title}`);
-        console.log(`   Severity : ${issue.severity}`);
-        console.log(`   Page     : ${issue.page}`);
-        console.log(`   Details  : ${issue.details}`);
+    // websiteModel.findings here is the aggregated view (one entry per
+    // unique issue TYPE, not one per page it was found on -- see
+    // findingAggregator.js), so this lists distinct problems once each.
+    websiteModel.findings.forEach((group, index) => {
+        const pageCount = group.affectedPageCount || 0;
+        const pageLabel = pageCount === 1 ? "1 page" : `${pageCount} pages`;
+        const exampleUrls = (group.examples || []).map(e => e.page).filter(Boolean);
+
+        console.log(`${index + 1}. ${group.title}`);
+        console.log(`   Severity : ${group.severity}`);
+        console.log(`   Affected : ${pageLabel}`);
+        if (exampleUrls.length > 0) {
+            const remaining = pageCount - exampleUrls.length;
+            const suffix = remaining > 0 ? ` (+${remaining} more)` : "";
+            console.log(`   Examples : ${exampleUrls.join(", ")}${suffix}`);
+        }
         console.log("");
     });
 }

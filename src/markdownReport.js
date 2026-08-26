@@ -36,9 +36,9 @@ function generateMarkdownReport(reportData) {
     lines.push("");
 
     const byCategory = {};
-    findings.forEach(finding => {
-        if (!byCategory[finding.category]) byCategory[finding.category] = [];
-        byCategory[finding.category].push(finding);
+    findings.forEach(group => {
+        if (!byCategory[group.category]) byCategory[group.category] = [];
+        byCategory[group.category].push(group);
     });
 
     lines.push("## Findings");
@@ -49,15 +49,26 @@ function generateMarkdownReport(reportData) {
         lines.push("");
     }
 
-    for (const [category, categoryFindings] of Object.entries(byCategory)) {
-        lines.push(`### ${escapeMarkdown(category)} (${categoryFindings.length})`);
+    // findings is already aggregated (one entry per unique issue TYPE --
+    // see findingAggregator.js), so a header missing on 48 pages is one
+    // bullet showing "48 pages affected", not 48 near-identical bullets.
+    for (const [category, categoryGroups] of Object.entries(byCategory)) {
+        lines.push(`### ${escapeMarkdown(category)} (${categoryGroups.length})`);
         lines.push("");
 
-        categoryFindings.forEach(finding => {
-            lines.push(`- **[${finding.severity}] ${escapeMarkdown(finding.title)}** — ${escapeMarkdown(finding.page)}`);
-            lines.push(`  ${escapeMarkdown(finding.details)}`);
-            if (finding.recommendation) {
-                lines.push(`  *Fix:* ${escapeMarkdown(finding.recommendation)}`);
+        categoryGroups.forEach(group => {
+            const pageCount = group.affectedPageCount || 0;
+            const pageLabel = pageCount === 1 ? "1 page" : `${pageCount} pages`;
+            lines.push(`- **[${group.severity}] ${escapeMarkdown(group.title)}** — ${pageLabel} affected`);
+
+            const exampleUrls = (group.examples || []).map(e => e.page).filter(Boolean);
+            if (exampleUrls.length > 0) {
+                const remaining = pageCount - exampleUrls.length;
+                const suffix = remaining > 0 ? ` (+${remaining} more)` : "";
+                lines.push(`  Example pages: ${escapeMarkdown(exampleUrls.join(", "))}${suffix}`);
+            }
+            if (group.recommendation) {
+                lines.push(`  *Fix:* ${escapeMarkdown(group.recommendation)}`);
             }
             lines.push("");
         });
