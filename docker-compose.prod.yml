@@ -1,4 +1,6 @@
-# Production-oriented compose (override secrets via env file)
+# Production-oriented: API and worker are separate processes.
+# Run migrations as a one-shot before rolling out:
+#   docker compose -f docker-compose.prod.yml run --rm api npx prisma migrate deploy
 services:
   postgres:
     image: postgres:17-alpine
@@ -18,11 +20,11 @@ services:
   redis:
     image: redis:7-alpine
     restart: always
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-changeme}
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme}", "ping"]
       interval: 10s
       timeout: 3s
       retries: 10
@@ -31,6 +33,7 @@ services:
     build:
       context: .
       dockerfile: qa-lab-backend/Dockerfile
+      target: api
     restart: always
     depends_on:
       postgres:
@@ -39,16 +42,47 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
+      RUN_MODE: api
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER:-qa_lab}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-qa_lab}?schema=public
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-changeme}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3001}
+      TRUST_PROXY: "true"
+      COOKIE_SECURE: "true"
       QA_LAB_SCANNER_ROOT: /app/scanner/lib
     ports:
       - "3000:3000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: qa-lab-backend/Dockerfile
+      target: worker
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      RUN_MODE: worker
+      DATABASE_URL: postgresql://${POSTGRES_USER:-qa_lab}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-qa_lab}?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-changeme}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET}
+      QA_LAB_SCANNER_ROOT: /app/scanner/lib
+      SCAN_TIMEOUT_MS: ${SCAN_TIMEOUT_MS:-600000}
+      ORG_SCAN_CONCURRENCY: ${ORG_SCAN_CONCURRENCY:-2}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-1}
+    # Network note: place worker on a network that can reach customer sites
+    # and Redis/Postgres only — not internal metadata endpoints if platform allows.
 
 volumes:
   postgres_data:

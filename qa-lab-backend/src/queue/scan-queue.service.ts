@@ -19,8 +19,8 @@ export class ScanQueueService implements OnModuleInit, OnModuleDestroy {
         maxRetriesPerRequest: null,
       },
       defaultJobOptions: {
-        attempts: 2,
-        backoff: { type: 'exponential', delay: 5000 },
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 10000 },
         removeOnComplete: 100,
         removeOnFail: 200,
       },

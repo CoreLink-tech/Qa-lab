@@ -8,25 +8,41 @@ import {
   type ScanJobPayload,
 } from '../queue/queue.constants';
 import { getScannerLibrary } from './scanner-bridge';
+import { OrgConcurrencyLimiter } from './org-concurrency.limiter';
+
+const DEFAULT_SCAN_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes wall clock
+const DEFAULT_MAX_PAGES = 50;
 
 /**
- * In-process BullMQ worker that runs the QA Lab scanner library against a
- * queued Scan row and persists the Report.
- *
- * Runs inside the API process for local/dev simplicity. Production can split
- * this into a dedicated worker process using the same processor logic.
+ * BullMQ worker for scan jobs.
+ * Only starts when RUN_MODE is `worker` or `all` (default `all` for local dev).
+ * Production: set RUN_MODE=api on the API process and RUN_MODE=worker on workers.
  */
 @Injectable()
 export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ScanProcessor.name);
   private worker: Worker<ScanJobPayload> | null = null;
+  private readonly runMode: string;
+  private readonly scanTimeoutMs: number;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-  ) {}
+    private readonly orgLimiter: OrgConcurrencyLimiter,
+  ) {
+    this.runMode = (process.env.RUN_MODE || 'all').toLowerCase();
+    this.scanTimeoutMs =
+      Number(process.env.SCAN_TIMEOUT_MS) || DEFAULT_SCAN_TIMEOUT_MS;
+  }
 
   onModuleInit(): void {
+    if (this.runMode === 'api') {
+      this.logger.log(
+        'RUN_MODE=api — scan worker not started in this process',
+      );
+      return;
+    }
+
     const connection = {
       host: this.config.get<string>('redis.host') || 'localhost',
       port: this.config.get<number>('redis.port') || 6379,
@@ -39,7 +55,10 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
       (job) => this.process(job),
       {
         connection,
-        concurrency: 1,
+        concurrency: Number(process.env.WORKER_CONCURRENCY) || 1,
+        lockDuration: this.scanTimeoutMs + 60_000,
+        stalledInterval: 30_000,
+        maxStalledCount: 2,
       },
     );
 
@@ -54,11 +73,18 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
       this.logger.log(`Scan job ${job.id} completed`);
     });
 
-    this.logger.log(`Scan worker listening on queue "${SCAN_QUEUE_NAME}"`);
+    this.worker.on('stalled', (jobId) => {
+      this.logger.warn(`Scan job ${jobId} stalled`);
+    });
+
+    this.logger.log(
+      `Scan worker listening on "${SCAN_QUEUE_NAME}" (timeout ${this.scanTimeoutMs}ms)`,
+    );
   }
 
   async onModuleDestroy(): Promise<void> {
     if (this.worker) {
+      this.logger.log('Closing scan worker gracefully…');
       await this.worker.close();
       this.worker = null;
     }
@@ -66,12 +92,12 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
 
   private async process(job: Job<ScanJobPayload>): Promise<void> {
     const { scanId } = job.data;
-    this.logger.log(`Processing scan ${scanId}`);
+    this.logger.log(`Processing scan ${scanId} (attempt ${job.attemptsMade + 1})`);
 
     const scan = await this.prisma.scan.findUnique({
       where: { id: scanId },
       include: {
-        website: true,
+        website: { include: { project: true } },
       },
     });
 
@@ -80,48 +106,70 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    if (scan.status === ScanStatus.CANCELLED) {
-      this.logger.log(`Scan ${scanId} already cancelled — skipping`);
+    if (
+      scan.status === ScanStatus.CANCELLED ||
+      scan.status === ScanStatus.COMPLETED
+    ) {
+      this.logger.log(`Scan ${scanId} status=${scan.status} — skipping`);
       return;
     }
 
-    await this.prisma.scan.update({
-      where: { id: scanId },
-      data: {
-        status: ScanStatus.RUNNING,
-        startedAt: new Date(),
-      },
-    });
-
-    const options = (scan.options as Record<string, unknown> | null) || {};
+    const organizationId = scan.website.project.organizationId;
+    const acquired = await this.orgLimiter.acquire(organizationId);
+    if (!acquired) {
+      // Soft defer: throw so BullMQ retries with backoff
+      throw new Error(
+        `Organization ${organizationId} at concurrency limit — retry later`,
+      );
+    }
 
     try {
-      const { scan: runScan } = getScannerLibrary();
-
-      const result = await runScan({
-        startUrl: scan.website.url,
-        scanId,
-        maxPages: (options.maxPages as number) ?? 50,
-        maxDepth: (options.maxDepth as number) ?? 2,
-        concurrency: (options.concurrency as number) ?? 5,
-        respectRobotsTxt: (options.respectRobotsTxt as boolean) ?? true,
-        checkExposedPaths: (options.checkExposedPaths as boolean) ?? false,
-        checkAssets: (options.checkAssets as boolean) ?? false,
-        writeReports: false,
-        onProgress: (event) => {
-          if (event.type === 'page' && event.pagesScanned != null) {
-            // Fire-and-forget progress update
-            void this.prisma.scan
-              .update({
-                where: { id: scanId },
-                data: { pagesScanned: event.pagesScanned },
-              })
-              .catch(() => undefined);
-          }
+      await this.prisma.scan.update({
+        where: { id: scanId },
+        data: {
+          status: ScanStatus.RUNNING,
+          startedAt: new Date(),
+          error: null,
         },
       });
 
-      // Re-check cancellation mid-flight
+      const options = (scan.options as Record<string, unknown> | null) || {};
+      const maxPages = Math.min(
+        (options.maxPages as number) ?? DEFAULT_MAX_PAGES,
+        Number(process.env.SCAN_HARD_MAX_PAGES) || 200,
+      );
+
+      const { scan: runScan } = getScannerLibrary();
+
+      const result = await this.withTimeout(
+        runScan({
+          startUrl: scan.website.url,
+          scanId,
+          maxPages,
+          maxDepth: (options.maxDepth as number) ?? 2,
+          concurrency: (options.concurrency as number) ?? 5,
+          respectRobotsTxt: (options.respectRobotsTxt as boolean) ?? true,
+          checkExposedPaths: (options.checkExposedPaths as boolean) ?? false,
+          checkAssets: (options.checkAssets as boolean) ?? false,
+          writeReports: false,
+          onProgress: (event: {
+            type?: string;
+            pagesScanned?: number;
+          }) => {
+            if (event.type === 'page' && event.pagesScanned != null) {
+              void this.prisma.scan
+                .update({
+                  where: { id: scanId },
+                  data: { pagesScanned: event.pagesScanned },
+                })
+                .catch(() => undefined);
+            }
+          },
+        }),
+        this.scanTimeoutMs,
+        scanId,
+      );
+
       const current = await this.prisma.scan.findUnique({
         where: { id: scanId },
         select: { status: true },
@@ -189,7 +237,10 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
       );
     } catch (error) {
       const message = (error as Error).message || String(error);
-      this.logger.error(`Scan ${scanId} threw: ${message}`, (error as Error).stack);
+      this.logger.error(
+        `Scan ${scanId} threw: ${message}`,
+        (error as Error).stack,
+      );
 
       await this.prisma.scan.update({
         where: { id: scanId },
@@ -200,8 +251,30 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
         },
       });
 
-      // Re-throw so BullMQ records the failure / can retry if configured
       throw error;
+    } finally {
+      await this.orgLimiter.release(organizationId);
     }
+  }
+
+  private withTimeout<T>(
+    promise: Promise<T>,
+    ms: number,
+    scanId: string,
+  ): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error(`Scan ${scanId} exceeded wall-clock timeout of ${ms}ms`));
+      }, ms);
+      promise
+        .then((v) => {
+          clearTimeout(timer);
+          resolve(v);
+        })
+        .catch((err) => {
+          clearTimeout(timer);
+          reject(err);
+        });
+    });
   }
 }

@@ -21,7 +21,11 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prisma:generate": "node scripts/prisma-generate.js",
     "lint:fix": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start:worker": "node dist/main.worker.js",
+    "start:worker:dev": "nest start --entryFile main.worker --watch",
+    "start:api": "RUN_MODE=api node dist/main.js",
+    "start:api:dev": "RUN_MODE=api nest start --watch"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
