@@ -2,6 +2,14 @@ import { createHmac } from 'crypto';
 import { ApiKeysService } from './api-keys.service';
 
 describe('ApiKeysService.validateRawKey', () => {
+  const prevSecret = process.env.JWT_ACCESS_SECRET;
+  beforeAll(() => {
+    process.env.JWT_ACCESS_SECRET = 'test-access-secret-at-least-32-characters-long';
+  });
+  afterAll(() => {
+    process.env.JWT_ACCESS_SECRET = prevSecret;
+  });
+
   const prisma = {
     apiKey: {
       findUnique: jest.fn(),
