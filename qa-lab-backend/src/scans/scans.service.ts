@@ -23,6 +23,86 @@ export class ScansService {
     private readonly scanQueue: ScanQueueService,
   ) {}
 
+
+  /**
+   * Create scan for either a user session or an API key principal.
+   */
+  async createForPrincipal(
+    principal: {
+      kind?: string;
+      id: string;
+      userId?: string | null;
+      organizationId?: string;
+    },
+    dto: CreateScanDto,
+  ) {
+    if (principal.kind === 'api_key' && principal.organizationId) {
+      const website = await this.websites.requireWebsiteInOrganization(
+        principal.organizationId,
+        dto.websiteId,
+      );
+      if (!website.isActive) {
+        throw new BadRequestException('Website is inactive');
+      }
+      return this.enqueueScan(website, dto, ScanTrigger.API);
+    }
+    const userId = principal.userId || principal.id;
+    return this.create(userId, dto);
+  }
+
+  private async enqueueScan(
+    website: { id: string; projectId: string; url: string; isActive: boolean },
+    dto: CreateScanDto,
+    trigger: typeof ScanTrigger.API | typeof ScanTrigger.MANUAL,
+  ) {
+    const options = {
+      maxPages: dto.maxPages ?? 50,
+      maxDepth: dto.maxDepth ?? 2,
+      concurrency: dto.concurrency ?? 5,
+      respectRobotsTxt: dto.respectRobotsTxt ?? true,
+      checkExposedPaths: dto.checkExposedPaths ?? false,
+      checkAssets: dto.checkAssets ?? false,
+    };
+
+    const scan = await this.prisma.scan.create({
+      data: {
+        projectId: website.projectId,
+        websiteId: website.id,
+        status: ScanStatus.QUEUED,
+        trigger,
+        options,
+      },
+    });
+
+    try {
+      await this.scanQueue.enqueue({ scanId: scan.id });
+    } catch (error) {
+      this.logger.error(
+        `Failed to enqueue scan ${scan.id}: ${(error as Error).message}`,
+      );
+      await this.prisma.scan.update({
+        where: { id: scan.id },
+        data: {
+          status: ScanStatus.FAILED,
+          error: 'Failed to enqueue scan job',
+          completedAt: new Date(),
+        },
+      });
+      throw error;
+    }
+
+    this.logger.log(`Scan ${scan.id} queued for website ${website.url}`);
+    return {
+      id: scan.id,
+      websiteId: scan.websiteId,
+      projectId: scan.projectId,
+      status: scan.status,
+      trigger: scan.trigger,
+      options: scan.options,
+      queuedAt: scan.queuedAt,
+    };
+  }
+
   async create(userId: string, dto: CreateScanDto) {
     const website = await this.websites.requireWebsiteAccess(
       userId,
@@ -82,6 +162,92 @@ export class ScansService {
       options: scan.options,
       queuedAt: scan.queuedAt,
     };
+  }
+
+
+  async listByWebsiteForPrincipal(
+    principal: { kind?: string; id: string; userId?: string | null; organizationId?: string },
+    websiteId: string,
+  ) {
+    if (principal.kind === 'api_key' && principal.organizationId) {
+      await this.websites.requireWebsiteInOrganization(
+        principal.organizationId,
+        websiteId,
+      );
+      return this.listByWebsiteInternal(websiteId);
+    }
+    return this.listByWebsite(principal.userId || principal.id, websiteId);
+  }
+
+  async getByIdForPrincipal(
+    principal: { kind?: string; id: string; userId?: string | null; organizationId?: string },
+    scanId: string,
+  ) {
+    if (principal.kind === 'api_key' && principal.organizationId) {
+      const scan = await this.prisma.scan.findUnique({
+        where: { id: scanId },
+        include: {
+          website: { include: { project: true } },
+          report: true,
+        },
+      });
+      if (!scan) throw new NotFoundException('Scan not found');
+      if (scan.website.project.organizationId !== principal.organizationId) {
+        throw new NotFoundException('Scan not found');
+      }
+      return this.getById(scan.website.projectId ? (principal.userId || 'api') : 'api', scanId).catch(async () => {
+        // Fallback shape without user membership
+        return {
+          id: scan.id,
+          websiteId: scan.websiteId,
+          projectId: scan.projectId,
+          status: scan.status,
+          trigger: scan.trigger,
+          options: scan.options,
+          pagesScanned: scan.pagesScanned,
+          error: scan.error,
+          queuedAt: scan.queuedAt,
+          startedAt: scan.startedAt,
+          completedAt: scan.completedAt,
+          website: {
+            id: scan.website.id,
+            name: scan.website.name,
+            url: scan.website.url,
+          },
+          report: scan.report,
+        };
+      });
+    }
+    return this.getById(principal.userId || principal.id, scanId);
+  }
+
+  private async listByWebsiteInternal(websiteId: string) {
+    const scans = await this.prisma.scan.findMany({
+      where: { websiteId },
+      include: {
+        report: {
+          select: { score: true, grade: true, issueCount: true },
+        },
+        website: { select: { id: true, name: true, url: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    return scans.map((s) => ({
+      id: s.id,
+      websiteId: s.websiteId,
+      projectId: s.projectId,
+      status: s.status,
+      trigger: s.trigger,
+      pagesScanned: s.pagesScanned,
+      score: s.report?.score ?? null,
+      grade: s.report?.grade ?? null,
+      issueCount: s.report?.issueCount ?? null,
+      queuedAt: s.queuedAt,
+      startedAt: s.startedAt,
+      completedAt: s.completedAt,
+      website: s.website,
+    }));
   }
 
   async listByWebsite(userId: string, websiteId: string) {

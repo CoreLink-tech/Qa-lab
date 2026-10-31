@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { createHash, randomBytes } from 'crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../database/prisma.service';
 import { OrganizationRole } from '../generated/prisma/client';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -111,21 +111,48 @@ export class ApiKeysService {
     return { id: keyId, revoked: true };
   }
 
-  /** Validate a raw API key for programmatic access (future middleware). */
+  /**
+   * Validate a raw API key. Uses constant-time hash compare against stored digests.
+   * lastUsedAt updates are throttled to at most once per 60s per key.
+   */
   async validateRawKey(rawKey: string) {
+    if (!rawKey || typeof rawKey !== 'string' || !rawKey.startsWith('qalab_')) {
+      return null;
+    }
+
     const keyHash = createHash('sha256').update(rawKey).digest('hex');
+    const keyHashBuf = Buffer.from(keyHash, 'hex');
+
+    // Lookup by hash (indexed unique). Still compare with timingSafeEqual.
     const key = await this.prisma.apiKey.findUnique({
       where: { keyHash },
-      include: { organization: true },
     });
-    if (!key || key.revokedAt) return null;
+    if (!key) return null;
+
+    const stored = Buffer.from(key.keyHash, 'hex');
+    if (
+      stored.length !== keyHashBuf.length ||
+      !timingSafeEqual(stored, keyHashBuf)
+    ) {
+      return null;
+    }
+
+    if (key.revokedAt) return null;
     if (key.expiresAt && key.expiresAt.getTime() < Date.now()) return null;
 
-    await this.prisma.apiKey.update({
-      where: { id: key.id },
-      data: { lastUsedAt: new Date() },
-    });
+    const shouldTouch =
+      !key.lastUsedAt ||
+      Date.now() - key.lastUsedAt.getTime() > 60_000;
+    if (shouldTouch) {
+      await this.prisma.apiKey
+        .update({
+          where: { id: key.id },
+          data: { lastUsedAt: new Date() },
+        })
+        .catch(() => undefined);
+    }
 
     return key;
   }
 }
+

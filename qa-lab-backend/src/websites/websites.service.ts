@@ -1,6 +1,7 @@
 import {
   ConflictException,
   Injectable,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
@@ -136,6 +137,21 @@ export class WebsitesService {
       }
       throw error;
     }
+  }
+
+
+  async requireWebsiteInOrganization(organizationId: string, websiteId: string) {
+    const website = await this.prisma.website.findUnique({
+      where: { id: websiteId },
+      include: { project: true },
+    });
+    if (!website) {
+      throw new NotFoundException('Website not found');
+    }
+    if (website.project.organizationId !== organizationId) {
+      throw new ForbiddenException('Website is outside API key organization');
+    }
+    return website;
   }
 
   async requireWebsiteAccess(userId: string, websiteId: string) {
