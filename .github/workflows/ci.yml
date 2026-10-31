@@ -86,8 +86,7 @@ jobs:
       - name: Build
         run: npm run build
       - name: Unit tests with coverage
-        run: npm test -- --coverage --coverageThreshold='{"global":{"statements":40,"branches":30,"functions":30,"lines":40}}' || npm test -- --coverage
-        # Threshold starts modest; raise in WS7. Fail soft on threshold config until suite grows.
+        run: npm run test:cov
       - name: Audit (high+)
         run: npm audit --omit=dev --audit-level=high
 

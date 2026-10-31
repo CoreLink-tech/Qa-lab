@@ -19,6 +19,7 @@ export class WebsitesService {
     private readonly prisma: PrismaService,
     private readonly projects: ProjectsService,
     private readonly organizations: OrganizationsService,
+    private readonly quotas: QuotasService,
   ) {}
 
   async create(userId: string, dto: CreateWebsiteDto) {
@@ -33,8 +34,6 @@ export class WebsitesService {
       [OrganizationRole.OWNER, OrganizationRole.ADMIN, OrganizationRole.MEMBER],
     );
 
-    const project = await this.prisma.project.findUnique({ where: { id: dto.projectId } });
-    if (!project) throw new NotFoundException('Project not found');
     await this.quotas.assertCanAddWebsite(project.organizationId);
     const url = await assertSafeExternalUrl(dto.url.trim());
 
