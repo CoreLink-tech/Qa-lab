@@ -1,7 +1,7 @@
 # QA Lab Architecture
 
 > Last updated: 2026-10-31  
-> Status: Phase 1 stabilization in progress
+> Status: Phase 2/3 in progress — Auth, Orgs, Projects, Websites, Scans API + BullMQ worker live
 
 ## 1. Overview
 
@@ -200,9 +200,9 @@ Progressive monorepo: keep CLI at root to avoid breaking existing users/docs; ex
 
 ## 10. Next phases (summary)
 
-- **Phase 1** (this document + scaffolding): stabilize repo, docs, CI, Docker, env examples, fix existing failures.
-- **Phase 2**: scanner library API + worker-safe invocation + SSRF guards.
-- **Phase 3+**: complete Auth, Projects, Scan API, workers, dashboard, scheduling, public API, monitoring, enterprise features.
+- **Phase 1** (done): stabilize repo, docs, CI, Docker, env examples.
+- **Phase 2** (mostly done): scanner library API (`src/lib`), SSRF guard, BullMQ worker invoking library.
+- **Phase 3** (in progress): Auth, Organizations, Projects, Websites, Scans API done. Remaining: Prisma migrations applied in all envs, dashboard (`apps/web`), scheduling, public API keys UI, monitoring.
 
 ---
 
