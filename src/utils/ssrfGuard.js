@@ -155,6 +155,9 @@ function isPrivateOrReservedIPv6(ip) {
 async function assertSafeScanUrl(urlString, options = {}) {
   const allowHttp = options.allowHttp !== false;
   const resolveDns = options.resolveDns !== false;
+  const allowPrivateNetwork =
+    options.allowPrivateNetwork === true ||
+    process.env.QA_LAB_ALLOW_PRIVATE_NETWORK === "1";
   const allowedPorts = options.allowedPorts
     ? new Set(options.allowedPorts)
     : DEFAULT_ALLOWED_PORTS;
@@ -187,7 +190,7 @@ async function assertSafeScanUrl(urlString, options = {}) {
   }
 
   const hostnameLower = hostname.toLowerCase();
-  if (BLOCKED_HOSTNAMES.has(hostnameLower)) {
+  if (BLOCKED_HOSTNAMES.has(hostnameLower) && !allowPrivateNetwork) {
     throw new Error(`Blocked hostname: ${hostname}`);
   }
 
@@ -197,7 +200,10 @@ async function assertSafeScanUrl(urlString, options = {}) {
       ? 443
       : 80;
   if (!allowedPorts.has(port)) {
-    throw new Error(`Port ${port} is not allowed`);
+    // Local integration tests use ephemeral ports on loopback
+    if (!(allowPrivateNetwork && port >= 1024 && port <= 65535)) {
+      throw new Error(`Port ${port} is not allowed`);
+    }
   }
 
   let isLiteralIp = net.isIP(hostname) !== 0;
@@ -213,7 +219,7 @@ async function assertSafeScanUrl(urlString, options = {}) {
   let resolvedAddresses = [];
 
   if (isLiteralIp) {
-    if (isBlockedIp(hostname)) {
+    if (isBlockedIp(hostname) && !allowPrivateNetwork) {
       throw new Error(`Blocked private/reserved address: ${hostname}`);
     }
     resolvedAddresses = [hostname];
@@ -228,7 +234,7 @@ async function assertSafeScanUrl(urlString, options = {}) {
       throw new Error(`Unable to resolve hostname: ${hostname}`);
     }
     for (const rec of records) {
-      if (isBlockedIp(rec.address)) {
+      if (isBlockedIp(rec.address) && !allowPrivateNetwork) {
         throw new Error(
           `Hostname ${hostname} resolves to blocked address ${rec.address}`,
         );

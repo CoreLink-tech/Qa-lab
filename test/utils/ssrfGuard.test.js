@@ -12,6 +12,9 @@ const {
 } = require("../../src/utils/ssrfGuard");
 
 describe("ssrfGuard", () => {
+  // Ensure attack-matrix tests are not weakened by the test-runner env flag
+  process.env.QA_LAB_ALLOW_PRIVATE_NETWORK = "";
+
   describe("stripIpv6Brackets", () => {
     it("strips brackets", () => {
       assert.equal(stripIpv6Brackets("[::1]"), "::1");

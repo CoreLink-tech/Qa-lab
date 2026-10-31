@@ -1,3 +1,4 @@
+process.env.QA_LAB_ALLOW_PRIVATE_NETWORK = "1";
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const http = require("node:http");
