@@ -10,8 +10,14 @@ describe("safeHttp redirect SSRF", () => {
   let server;
   /** @type {number} */
   let port;
+  /** @type {string|undefined} */
+  let prevAllowPrivate;
 
   before(async () => {
+    // These cases assert Blocked* SSRF policy. The suite runs with
+    // QA_LAB_ALLOW_PRIVATE_NETWORK=1 for local fixtures; turn it off here.
+    prevAllowPrivate = process.env.QA_LAB_ALLOW_PRIVATE_NETWORK;
+    delete process.env.QA_LAB_ALLOW_PRIVATE_NETWORK;
     server = http.createServer((req, res) => {
       if (req.url === "/ok") {
         res.writeHead(200, { "Content-Type": "text/plain" });
@@ -45,6 +51,11 @@ describe("safeHttp redirect SSRF", () => {
   });
 
   after(async () => {
+    if (prevAllowPrivate === undefined) {
+      delete process.env.QA_LAB_ALLOW_PRIVATE_NETWORK;
+    } else {
+      process.env.QA_LAB_ALLOW_PRIVATE_NETWORK = prevAllowPrivate;
+    }
     await new Promise((resolve) => server.close(resolve));
   });
 

@@ -28,9 +28,19 @@ function buildWebhookPayload(reportData, gateResult = null) {
 // them as fatal.
 async function sendWebhook(url, payload) {
     try {
-        await httpClient.post(url, payload, {
+        const response = await httpClient.post(url, payload, {
             headers: { "Content-Type": "application/json" }
         });
+        // safeHttp uses validateStatus: () => true so non-2xx does not throw;
+        // treat anything outside 2xx as delivery failure.
+        const status = response && response.status;
+        if (typeof status === "number" && (status < 200 || status >= 300)) {
+            return {
+                url,
+                success: false,
+                error: `HTTP ${status}`,
+            };
+        }
         return { url, success: true, error: null };
     } catch (error) {
         return { url, success: false, error: error.message };
