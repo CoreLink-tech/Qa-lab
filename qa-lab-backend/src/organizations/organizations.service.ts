@@ -177,6 +177,56 @@ export class OrganizationsService {
     return membership;
   }
 
+
+  async inviteMember(
+    actorId: string,
+    organizationId: string,
+    email: string,
+    role: OrganizationRole,
+  ) {
+    await this.requireMembership(actorId, organizationId, [
+      OrganizationRole.OWNER,
+      OrganizationRole.ADMIN,
+    ]);
+
+    if (role === OrganizationRole.OWNER) {
+      throw new ForbiddenException('Cannot assign OWNER via invite');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase().trim() },
+    });
+    if (!user) {
+      throw new NotFoundException(
+        'No user with that email. They must register first.',
+      );
+    }
+
+    const existing = await this.prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: { organizationId, userId: user.id },
+      },
+    });
+    if (existing) {
+      throw new ConflictException('User is already a member');
+    }
+
+    const membership = await this.prisma.organizationMember.create({
+      data: {
+        organizationId,
+        userId: user.id,
+        role,
+      },
+    });
+
+    return {
+      userId: user.id,
+      email: user.email,
+      role: membership.role,
+      organizationId,
+    };
+  }
+
   private slugify(input: string): string {
     return (
       input

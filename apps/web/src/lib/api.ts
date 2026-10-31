@@ -293,3 +293,61 @@ export const scans = {
       method: "POST",
     }),
 };
+
+// ---- API keys & schedules ----
+
+export type ApiKeySummary = {
+  id: string;
+  name: string;
+  prefix: string;
+  scopes: string[];
+  lastUsedAt?: string | null;
+  createdAt: string;
+};
+
+export type ScheduleSummary = {
+  id: string;
+  websiteId: string;
+  intervalHours: number;
+  enabled: boolean;
+  lastRunAt?: string | null;
+  nextRunAt?: string | null;
+};
+
+export const apiKeys = {
+  list: (organizationId: string) =>
+    api<ApiKeySummary[]>(`/api-keys?organizationId=${organizationId}`),
+  create: (body: {
+    organizationId: string;
+    name: string;
+    scopes?: string[];
+  }) =>
+    api<ApiKeySummary & { key: string; warning: string }>("/api-keys", {
+      method: "POST",
+      body,
+    }),
+  revoke: (keyId: string) =>
+    api<{ id: string; revoked: boolean }>(`/api-keys/${keyId}`, {
+      method: "DELETE",
+    }),
+};
+
+export const schedules = {
+  list: (websiteId: string) =>
+    api<ScheduleSummary[]>(`/schedules?websiteId=${websiteId}`),
+  create: (body: {
+    websiteId: string;
+    intervalHours?: number;
+    maxPages?: number;
+    maxDepth?: number;
+  }) => api<ScheduleSummary>("/schedules", { method: "POST", body }),
+  setEnabled: (id: string, enabled: boolean) =>
+    api<ScheduleSummary>(`/schedules/${id}`, {
+      method: "PATCH",
+      body: { enabled },
+    }),
+  remove: (id: string) =>
+    api<{ id: string; deleted: boolean }>(`/schedules/${id}`, {
+      method: "DELETE",
+    }),
+};

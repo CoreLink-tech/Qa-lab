@@ -10,15 +10,20 @@
     "start": "node src/index.js",
     "test": "node --test \"test/**/*.test.js\"",
     "test:scanner": "node --test \"test/**/*.test.js\"",
-    "lint": "echo \"No root linter configured yet – scanner is CommonJS; backend has its own eslint\"",
-    "build": "echo \"Scanner is pure JS – no build step required\"",
+    "lint": "echo \"No root linter configured yet \u2013 scanner is CommonJS; backend has its own eslint\"",
+    "build": "echo \"Scanner is pure JS \u2013 no build step required\"",
     "dev": "node src/index.js",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "backend:install": "npm ci --prefix qa-lab-backend",
     "backend:dev": "npm run start:dev --prefix qa-lab-backend",
     "backend:test": "npm test --prefix qa-lab-backend",
-    "backend:build": "npm run build --prefix qa-lab-backend"
+    "backend:build": "npm run build --prefix qa-lab-backend",
+    "web:install": "npm install --prefix apps/web",
+    "web:dev": "npm run dev --prefix apps/web",
+    "web:build": "npm run build --prefix apps/web",
+    "backend:migrate": "npm exec --prefix qa-lab-backend -- prisma migrate deploy",
+    "setup": "npm run docker:up && npm run backend:install && npm run backend:migrate && npm run web:install"
   },
   "keywords": [
     "qa",

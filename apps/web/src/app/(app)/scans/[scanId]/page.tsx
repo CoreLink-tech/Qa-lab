@@ -90,6 +90,25 @@ export default function ScanDetailPage() {
         description={scan.website?.url || scan.websiteId}
         actions={
           <div className="flex items-center gap-2">
+            {scan.report?.reportJson ? (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  const blob = new Blob(
+                    [JSON.stringify(scan.report?.reportJson, null, 2)],
+                    { type: "application/json" },
+                  );
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `qa-lab-scan-${scanId}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                Download JSON
+              </Button>
+            ) : null}
             {(scan.status === "QUEUED" || scan.status === "RUNNING") && (
               <Button
                 variant="danger"

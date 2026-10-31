@@ -17,6 +17,7 @@ import {
   ApiError,
   projects,
   scans,
+  schedules,
   websites,
   type ProjectSummary,
   type ScanSummary,
@@ -73,6 +74,17 @@ export default function ProjectDetailPage() {
       );
     } finally {
       setAdding(false);
+    }
+  }
+
+  async function onSchedule(websiteId: string) {
+    setError(null);
+    try {
+      await schedules.create({ websiteId, intervalHours: 24, maxPages: 30 });
+      setError(null);
+      alert("Daily schedule created for this website.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to create schedule");
     }
   }
 
@@ -154,13 +166,21 @@ export default function ProjectDetailPage() {
                         {w.url}
                       </a>
                     </div>
-                    <Button
-                      variant="secondary"
-                      disabled={scanningId === w.id}
-                      onClick={() => onStartScan(w.id)}
-                    >
-                      {scanningId === w.id ? "Queueing…" : "Run scan"}
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="secondary"
+                        disabled={scanningId === w.id}
+                        onClick={() => onStartScan(w.id)}
+                      >
+                        {scanningId === w.id ? "Queueing…" : "Run scan"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => onSchedule(w.id)}
+                      >
+                        Schedule daily
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ul>

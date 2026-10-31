@@ -20,6 +20,7 @@ import {
 } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
+import { InviteMemberDto } from './dto/invite-member.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { OrganizationsService } from './organizations.service';
 
@@ -55,6 +56,21 @@ export class OrganizationsController {
     @Param('organizationId', ParseUUIDPipe) organizationId: string,
   ) {
     return this.organizationsService.getOne(user.id, organizationId);
+  }
+
+
+  @Post('invite')
+  @ApiOperation({ summary: 'Add an existing user to the organization' })
+  invite(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: InviteMemberDto,
+  ) {
+    return this.organizationsService.inviteMember(
+      user.id,
+      dto.organizationId,
+      dto.email,
+      dto.role,
+    );
   }
 
   @Patch(':organizationId')

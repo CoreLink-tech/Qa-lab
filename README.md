@@ -1,12 +1,68 @@
 # QA Lab
 
-> A modern website Quality Assurance platform for automated website auditing, analysis, and reporting.
+> Website Quality Assurance platform — CLI scanner, API, workers, and dashboard.
 
-QA Lab is a Node.js-powered website quality assurance engine that crawls websites, analyzes pages, detects quality issues, and generates detailed reports with actionable recommendations.
+## Platform overview
 
-Whether you're a developer, QA engineer, freelancer, agency, or business owner, QA Lab helps identify issues before they affect your users.
+| Component | Path | Port |
+|-----------|------|------|
+| CLI scanner | `src/` | — |
+| API + worker | `qa-lab-backend/` | 3000 |
+| Dashboard | `apps/web/` | 3001 |
+| Postgres + Redis | `docker-compose.yml` | 5432 / 6379 |
+
+### Quick start (full stack)
+
+```bash
+# Infrastructure
+docker compose up -d
+
+# Backend
+cd qa-lab-backend
+cp .env.example .env   # set JWT_ACCESS_SECRET and JWT_REFRESH_SECRET (≥32 chars)
+# CORS_ORIGIN=http://localhost:3001
+npm install
+npx prisma migrate deploy
+npx prisma generate
+npm run start:dev
+
+# Dashboard (new terminal)
+cd apps/web
+cp .env.example .env.local
+npm install
+npm run dev
+```
+
+Open http://localhost:3001 → register → create project → add website → **Run scan**.
+
+API docs: http://localhost:3000/api/docs
+
+### API surface
+
+- `POST /api/auth/register|login|refresh|logout` · `GET /api/auth/me`
+- Organizations, projects, websites (CRUD)
+- `POST /api/scans` · list/get/cancel
+- `POST /api/schedules` · recurring scans (ticker every 60s)
+- `POST /api/api-keys` · create (shown once) / list / revoke
+
+### Security notes
+
+- SSRF protection on all user-supplied scan URLs
+- Passive security checks only (no exploit payloads)
+- Passwords hashed (bcryptjs); refresh tokens hashed at rest
+- JWT access tokens (15m) + rotated refresh tokens
+- Global rate limiting + tighter limits on auth routes
+
+### Production
+
+See `docker-compose.prod.yml` and `qa-lab-backend/Dockerfile`.
 
 ---
+
+## CLI scanner
+
+The following sections describe the standalone scanner (also used by the API worker).
+
 
 # Features
 

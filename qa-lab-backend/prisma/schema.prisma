@@ -126,6 +126,7 @@ model Website {
   project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   scans       Scan[]
+  schedules   ScanSchedule[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -262,4 +263,27 @@ model AuditLog {
   @@index([organizationId, createdAt])
   @@index([userId, createdAt])
   @@index([resource, resourceId])
+}
+
+
+model ScanSchedule {
+  id          String   @id @default(uuid())
+  websiteId   String
+
+  /// Interval in hours between runs (1–168)
+  intervalHours Int     @default(24)
+  enabled     Boolean  @default(true)
+
+  options     Json?
+
+  lastRunAt   DateTime?
+  nextRunAt   DateTime?
+
+  website     Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([websiteId])
+  @@index([enabled, nextRunAt])
 }

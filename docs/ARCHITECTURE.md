@@ -1,7 +1,7 @@
 # QA Lab Architecture
 
 > Last updated: 2026-10-31  
-> Status: Phase 2/3 in progress — Auth, Orgs, Projects, Websites, Scans API + BullMQ worker live
+> Status: Platform complete for MVP — Auth, orgs, projects, websites, scans, schedules, API keys, dashboard, deploy compose.
 
 ## 1. Overview
 
