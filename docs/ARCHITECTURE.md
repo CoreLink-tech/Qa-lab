@@ -91,8 +91,8 @@ Quotas live on Organization. Domain verification fields on Website.
 1. Email defaults to **log-only**. Real delivery requires `EMAIL_MODE=smtp` and `SMTP_*` (nodemailer adapter).
 2. TOTP 2FA is **not** implemented.
 3. CSRF double-submit for pure cookie SPA mutations is **not** fully implemented (Bearer access + SameSite refresh).
-4. Coverage gates are **baseline** (~35%), not 80%.
-5. No Playwright e2e in CI yet.
+4. Coverage gates are **baseline** (≥30% lines in CI), not 80%. Health + auth e2e run in CI.
+5. API e2e (health, auth) run in CI; no Playwright UI e2e yet.
 6. Worker timeout aborts via `AbortSignal` (crawler + safeHttp/axios). Residual: a request already in flight may finish before cancel takes effect.
 7. CSP allows `'unsafe-inline'` / `'unsafe-eval'` for Next.js compatibility.
 8. Plan tiers are enforced in code defaults; **no billing** integration.

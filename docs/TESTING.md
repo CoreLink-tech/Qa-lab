@@ -7,7 +7,7 @@ cd qa-lab-backend && npm run test:cov
 ```
 
 Coverage gate (global, modest baseline to grow in CI):
-- statements ≥ 35%, branches ≥ 25%, functions ≥ 30%, lines ≥ 35%
+- statements ≥ 30%, branches ≥ 20%, functions ≥ 25%, lines ≥ 30% (enforced in `package.json` `coverageThreshold`; raise over time toward 80%)
 
 Exclusions: generated Prisma client, `main.ts` / `main.worker.ts`, Nest modules.
 

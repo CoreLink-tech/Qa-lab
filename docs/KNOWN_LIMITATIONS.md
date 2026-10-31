@@ -7,7 +7,7 @@ Highlights:
 
 - Email defaults to **log-only**; set `EMAIL_MODE=smtp` + `SMTP_*` for real delivery (see `docs/AUTH.md`).
 - No TOTP 2FA.
-- Test coverage gates are baseline (~35%), not 80%.
+- Test coverage gates are baseline (≥30% lines in CI), not 80%.
 - Open registration without CAPTCHA / strong email proof in production is risky.
 - Worker wall-clock timeout aborts the scan `AbortSignal` through crawler + safeHttp; rare in-flight edge cases may still complete a single request.
 - Next.js CSP still permits unsafe inline/eval without a nonce pipeline.
