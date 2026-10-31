@@ -93,6 +93,7 @@ async function requestPinned(validated, opts = {}) {
     maxBodyLength: maxBody,
     responseType: opts.responseType || "text",
     data: opts.data,
+    signal: opts.signal,
     transitional: { clarifyTimeoutError: true },
   };
 
@@ -123,6 +124,12 @@ async function safeRequest(urlString, opts = {}) {
       allowedPorts: opts.allowedPorts,
     });
 
+    if (opts.signal?.aborted) {
+      const err = new Error("Scan cancelled");
+      err.name = "AbortError";
+      throw err;
+    }
+
     response = await requestPinned(validated, {
       method: opts.method || "GET",
       headers: opts.headers,
@@ -130,6 +137,7 @@ async function safeRequest(urlString, opts = {}) {
       timeoutMs: opts.timeoutMs,
       maxBodyBytes: opts.maxBodyBytes,
       responseType: opts.responseType,
+      signal: opts.signal,
     });
 
     const status = response.status;

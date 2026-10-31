@@ -92,8 +92,10 @@ async function crawlSite(startUrl, options = {}) {
         console.log(`Crawling depth ${levelToFetch[0].depth}: ${levelToFetch.length} page(s)...`);
 
         const fetchedLevel = await mapWithConcurrency(levelToFetch, concurrency, async (item) => {
+            assertNotAborted();
             await wait();
-            const page = await fetchPage(item.url);
+            assertNotAborted();
+            const page = await fetchPage(item.url, { signal });
             return { ...page, depth: item.depth };
         });
 
