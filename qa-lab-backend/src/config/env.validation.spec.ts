@@ -7,8 +7,8 @@ function validConfig(overrides: Record<string, unknown> = {}) {
     DATABASE_URL: 'postgresql://user:pass@localhost:5432/db',
     REDIS_HOST: 'localhost',
     REDIS_PORT: '6379',
-    JWT_ACCESS_SECRET: 'access-secret',
-    JWT_REFRESH_SECRET: 'refresh-secret',
+    JWT_ACCESS_SECRET: 'test-access-secret-at-least-32-characters-long',
+    JWT_REFRESH_SECRET: 'test-refresh-secret-at-least-32-characters-long',
     ...overrides,
   };
 }

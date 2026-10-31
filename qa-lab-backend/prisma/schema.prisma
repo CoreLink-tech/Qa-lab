@@ -143,10 +143,14 @@ model Scan {
   status      ScanStatus  @default(QUEUED)
   trigger     ScanTrigger @default(MANUAL)
 
+  // Snapshot of the scan settings used for this run (maxPages, depth, etc.)
+  options     Json?
+
   queuedAt    DateTime    @default(now())
   startedAt   DateTime?
   completedAt DateTime?
 
+  pagesScanned Int?
   error       String?
 
   project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)

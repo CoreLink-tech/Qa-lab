@@ -7,6 +7,7 @@ import {
   IsUrl,
   Max,
   Min,
+  MinLength,
   validateSync,
 } from 'class-validator';
 
@@ -43,9 +44,11 @@ class EnvironmentVariables {
   REDIS_PASSWORD?: string;
 
   @IsString()
+  @MinLength(32)
   JWT_ACCESS_SECRET!: string;
 
   @IsString()
+  @MinLength(32)
   JWT_REFRESH_SECRET!: string;
 
   @IsOptional()
