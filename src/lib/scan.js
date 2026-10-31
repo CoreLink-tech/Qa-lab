@@ -149,6 +149,12 @@ async function scan(request) {
   emit({ type: "started", message: `Starting scan of ${startUrl}` });
 
   try {
+    if (request.signal?.aborted) {
+      const err = new Error("Scan cancelled");
+      err.name = "AbortError";
+      throw err;
+    }
+
     // Load rules (plugins + built-ins). disabledRules / rules filter applied by registry if supported.
     const rules = await loadRulesWithPlugins({
       rulesDirs: request.rulesDirs || [],
