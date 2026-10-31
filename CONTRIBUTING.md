@@ -91,3 +91,12 @@ See `docs/ARCHITECTURE.md` for the full picture.
 ## Questions
 
 Open a discussion or issue with the `question` label.
+
+## Dashboard
+
+```bash
+cd apps/web
+cp .env.example .env.local
+npm install
+npm run dev   # http://localhost:3001
+```
