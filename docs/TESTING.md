@@ -22,6 +22,8 @@ GitHub Actions `backend` job uses Postgres + Redis service containers, runs migr
 cd qa-lab-backend && npm run test:e2e
 ```
 
+E2E suites: `health.e2e-spec.ts` (live/ready/health), `auth.e2e-spec.ts` (register/login/me).
+
 
 ## Load smoke
 ```bash
