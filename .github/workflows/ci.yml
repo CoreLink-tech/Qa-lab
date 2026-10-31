@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scanner-test:
+    name: Scanner (CLI) tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x, 22.x]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install scanner dependencies
+        run: npm ci
+
+      - name: Run scanner test suite
+        run: npm test
+
+  backend-lint-typecheck-test:
+    name: Backend lint, typecheck & unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: qa-lab-backend
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: qa_lab
+          POSTGRES_PASSWORD: qa_lab_password
+          POSTGRES_DB: qa_lab
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U qa_lab -d qa_lab"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: qa-lab-backend/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit tests
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://qa_lab:qa_lab_password@localhost:5432/qa_lab?schema=public
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          JWT_ACCESS_SECRET: test-access-secret-at-least-32-characters-long
+          JWT_REFRESH_SECRET: test-refresh-secret-at-least-32-characters-long
+        run: npm test -- --passWithNoTests
+
+  # Placeholder for future e2e once more modules exist
+  # backend-e2e:
+  #   needs: backend-lint-typecheck-test
+  #   ...

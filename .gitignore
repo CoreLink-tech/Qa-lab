@@ -1,3 +1,38 @@
+# Dependencies
 node_modules/
-reports/
+qa-lab-backend/node_modules/
+
+# Environment & secrets
 .env
+.env.*
+!.env.example
+qa-lab-backend/.env
+qa-lab-backend/.env.*
+!qa-lab-backend/.env.example
+
+# Build / generated
+dist/
+build/
+coverage/
+qa-lab-backend/dist/
+qa-lab-backend/coverage/
+qa-lab-backend/src/generated/
+
+# Runtime / local
+reports/
+*.log
+npm-debug.log*
+yarn-error.log*
+.DS_Store
+.idea/
+.vscode/
+*.pid
+tmp/
+temp/
+.cache/
+playwright-report/
+test-results/
+
+# OS / editor
+*.swp
+*~

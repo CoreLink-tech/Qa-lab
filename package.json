@@ -8,7 +8,17 @@
   },
   "scripts": {
     "start": "node src/index.js",
-    "test": "node --test \"test/**/*.test.js\""
+    "test": "node --test \"test/**/*.test.js\"",
+    "test:scanner": "node --test \"test/**/*.test.js\"",
+    "lint": "echo \"No root linter configured yet – scanner is CommonJS; backend has its own eslint\"",
+    "build": "echo \"Scanner is pure JS – no build step required\"",
+    "dev": "node src/index.js",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "backend:install": "npm ci --prefix qa-lab-backend",
+    "backend:dev": "npm run start:dev --prefix qa-lab-backend",
+    "backend:test": "npm test --prefix qa-lab-backend",
+    "backend:build": "npm run build --prefix qa-lab-backend"
   },
   "keywords": [
     "qa",
@@ -32,5 +42,9 @@
   },
   "engines": {
     "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CoreLink-tech/qa-lab.git"
   }
 }

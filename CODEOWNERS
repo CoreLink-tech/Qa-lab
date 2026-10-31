@@ -1,0 +1,14 @@
+# Default owners for the repository
+*       @CoreLink-tech
+
+# Backend
+/qa-lab-backend/        @CoreLink-tech
+
+# Scanner core
+/src/                   @CoreLink-tech
+/test/                  @CoreLink-tech
+
+# Infrastructure & CI
+/.github/               @CoreLink-tech
+/infra/                 @CoreLink-tech
+/docker-compose*.yml    @CoreLink-tech
