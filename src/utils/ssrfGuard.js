@@ -1,13 +1,15 @@
 /**
- * SSRF protection helpers.
+ * SSRF protection: validate user-supplied URLs before any outbound request.
  *
- * Never trust a user-supplied URL. Before any outbound request (crawl,
- * exposed-path probe, asset check, etc.) the start URL and discovered
- * targets should be validated against private/link-local/metadata ranges
- * and disallowed schemes.
+ * Design:
+ * - Strip IPv6 brackets before classification
+ * - Use ipaddr.js for CIDR / special-range checks (IPv4-mapped, etc.)
+ * - Always resolve DNS when resolveDns is true (default) and reject if ANY
+ *   A/AAAA record is blocked
+ * - Callers that perform HTTP must use safeHttp (pinned IP + manual redirects)
  *
- * This module is intentionally conservative. Callers may add allow-lists
- * on top (e.g. only scan domains belonging to the authenticated org).
+ * Dependency justification: `ipaddr.js` — widely used, maintained, handles
+ * IPv4-mapped IPv6 and CIDR membership correctly; avoids hand-rolled range bugs.
  */
 
 "use strict";
@@ -15,135 +17,244 @@
 const { URL } = require("url");
 const net = require("net");
 const dns = require("dns").promises;
+const ipaddr = require("ipaddr.js");
 
-/** Hostnames / IPs that must never be contacted. */
+/** Hostnames that must never be contacted (metadata / loopback aliases). */
 const BLOCKED_HOSTNAMES = new Set([
   "localhost",
   "localhost.localdomain",
   "metadata.google.internal",
   "metadata.google",
   "instance-data",
+  "metadata",
 ]);
 
+/** Default allowed ports for scan targets. */
+const DEFAULT_ALLOWED_PORTS = new Set([80, 443]);
+
 /**
- * Returns true if the IPv4 address is private, loopback, link-local, or
- * otherwise non-routable / dangerous for SSRF.
- * @param {string} ip
+ * IPv4 CIDR ranges that must be blocked (private, special, metadata-adjacent).
+ * @type {Array<[string, number]>}
  */
-function isPrivateOrReservedIPv4(ip) {
-  const parts = ip.split(".").map(Number);
-  if (parts.length !== 4 || parts.some((p) => Number.isNaN(p) || p < 0 || p > 255)) {
-    return true; // malformed → treat as blocked
+const BLOCKED_IPV4_CIDRS = [
+  ["0.0.0.0", 8],
+  ["10.0.0.0", 8],
+  ["100.64.0.0", 10],
+  ["127.0.0.0", 8],
+  ["169.254.0.0", 16],
+  ["172.16.0.0", 12],
+  ["192.0.0.0", 24],
+  ["192.0.2.0", 24],
+  ["192.168.0.0", 16],
+  ["198.18.0.0", 15],
+  ["198.51.100.0", 24],
+  ["203.0.113.0", 24],
+  ["224.0.0.0", 4],
+  ["240.0.0.0", 4],
+];
+
+const BLOCKED_IPV6_CIDRS = [
+  ["::1", 128],
+  ["::", 128],
+  ["fc00::", 7],
+  ["fe80::", 10],
+  ["ff00::", 8],
+  ["2001:db8::", 32],
+  ["64:ff9b::", 96],
+];
+
+function stripIpv6Brackets(hostname) {
+  if (
+    typeof hostname === "string" &&
+    hostname.startsWith("[") &&
+    hostname.endsWith("]")
+  ) {
+    return hostname.slice(1, -1);
   }
-  const [a, b] = parts;
-  // 0.0.0.0/8, 10.0.0.0/8, 127.0.0.0/8, 169.254.0.0/16 (link-local + cloud metadata),
-  // 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10 (CGNAT), 192.0.0.0/24, etc.
-  if (a === 0) return true;
-  if (a === 10) return true;
-  if (a === 127) return true;
-  if (a === 169 && b === 254) return true;
-  if (a === 172 && b >= 16 && b <= 31) return true;
-  if (a === 192 && b === 168) return true;
-  if (a === 100 && b >= 64 && b <= 127) return true;
-  if (a === 192 && b === 0) return true;
-  if (a >= 224) return true; // multicast / reserved
+  return hostname;
+}
+
+function embeddedIpv4(addr) {
+  if (typeof addr.isIPv4MappedAddress === "function" && addr.isIPv4MappedAddress()) {
+    return addr.toIPv4Address().toString();
+  }
+  try {
+    const parts = addr.parts;
+    if (
+      parts[0] === 0x64 &&
+      parts[1] === 0xff9b &&
+      parts[2] === 0 &&
+      parts[3] === 0 &&
+      parts[4] === 0 &&
+      parts[5] === 0
+    ) {
+      const hi = parts[6];
+      const lo = parts[7];
+      return `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function isBlockedIp(ip) {
+  let parsed;
+  try {
+    parsed = ipaddr.parse(ip);
+  } catch {
+    return true;
+  }
+
+  if (parsed.kind() === "ipv4") {
+    for (const [range, prefix] of BLOCKED_IPV4_CIDRS) {
+      try {
+        if (parsed.match(ipaddr.parse(range), prefix)) return true;
+      } catch {
+        /* continue */
+      }
+    }
+    return false;
+  }
+
+  const asV4 = embeddedIpv4(parsed);
+  if (asV4 && isBlockedIp(asV4)) return true;
+
+  for (const [range, prefix] of BLOCKED_IPV6_CIDRS) {
+    try {
+      if (parsed.match(ipaddr.parse(range), prefix)) return true;
+    } catch {
+      /* continue */
+    }
+  }
+
+  try {
+    const parts = parsed.parts;
+    if (parts[0] === 0x2002) {
+      const a = (parts[1] >> 8) & 0xff;
+      const b = parts[1] & 0xff;
+      const c = (parts[2] >> 8) & 0xff;
+      const d = parts[2] & 0xff;
+      if (isBlockedIp(`${a}.${b}.${c}.${d}`)) return true;
+    }
+  } catch {
+    /* ignore */
+  }
+
   return false;
 }
 
-/**
- * Basic IPv6 private / loopback / link-local check (conservative).
- * @param {string} ip
- */
+function isPrivateOrReservedIPv4(ip) {
+  return isBlockedIp(ip);
+}
+
 function isPrivateOrReservedIPv6(ip) {
-  const normalized = ip.toLowerCase();
-  if (normalized === "::1" || normalized === "::") return true;
-  if (normalized.startsWith("fc") || normalized.startsWith("fd")) return true; // ULA
-  if (normalized.startsWith("fe80")) return true; // link-local
-  if (normalized.startsWith("ff")) return true; // multicast
-  return false;
+  return isBlockedIp(ip);
 }
 
-/**
- * Validate a URL string before using it as a scan target.
- * Throws on invalid / blocked targets.
- *
- * @param {string} urlString
- * @param {{ allowHttp?: boolean, resolveDns?: boolean }} [options]
- * @returns {Promise<{ href: string, hostname: string, protocol: string }>}
- */
 async function assertSafeScanUrl(urlString, options = {}) {
-  const allowHttp = options.allowHttp !== false; // default allow http for public sites
-  const resolveDns = options.resolveDns === true; // opt-in because of extra latency
+  const allowHttp = options.allowHttp !== false;
+  const resolveDns = options.resolveDns !== false;
+  const allowedPorts = options.allowedPorts
+    ? new Set(options.allowedPorts)
+    : DEFAULT_ALLOWED_PORTS;
+
+  if (typeof urlString !== "string" || !urlString.trim()) {
+    throw new Error("Invalid URL: empty");
+  }
 
   let parsed;
   try {
     parsed = new URL(urlString);
   } catch {
-    throw new Error(`Invalid URL: ${urlString}`);
+    throw new Error("Invalid URL");
   }
 
-  const protocol = parsed.protocol.toLowerCase();
-  if (protocol !== "https:" && protocol !== "http:") {
-    throw new Error(`Disallowed URL scheme: ${protocol}`);
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error(`Disallowed URL scheme: ${parsed.protocol}`);
   }
-  if (protocol === "http:" && !allowHttp) {
-    throw new Error("HTTP URLs are not allowed by policy");
+  if (parsed.protocol === "http:" && !allowHttp) {
+    throw new Error("HTTP URLs are not allowed");
   }
 
-  const hostname = parsed.hostname.toLowerCase();
+  if (parsed.username || parsed.password) {
+    throw new Error("URLs with credentials are not allowed");
+  }
+
+  let hostname = stripIpv6Brackets(parsed.hostname);
   if (!hostname) {
-    throw new Error("URL must have a hostname");
+    throw new Error("Invalid URL: missing hostname");
   }
 
-  if (BLOCKED_HOSTNAMES.has(hostname)) {
+  const hostnameLower = hostname.toLowerCase();
+  if (BLOCKED_HOSTNAMES.has(hostnameLower)) {
     throw new Error(`Blocked hostname: ${hostname}`);
   }
 
-  // Literal IP in the URL
-  if (net.isIP(hostname)) {
-    if (net.isIPv4(hostname) && isPrivateOrReservedIPv4(hostname)) {
-      throw new Error(`Blocked private/reserved IPv4 address: ${hostname}`);
-    }
-    if (net.isIPv6(hostname) && isPrivateOrReservedIPv6(hostname)) {
-      throw new Error(`Blocked private/reserved IPv6 address: ${hostname}`);
-    }
-  } else if (resolveDns) {
-    // Resolve and re-check (protects against DNS rebinding to private IPs)
+  let port = parsed.port
+    ? Number(parsed.port)
+    : parsed.protocol === "https:"
+      ? 443
+      : 80;
+  if (!allowedPorts.has(port)) {
+    throw new Error(`Port ${port} is not allowed`);
+  }
+
+  let isLiteralIp = net.isIP(hostname) !== 0;
+  if (!isLiteralIp) {
     try {
-      const records = await dns.lookup(hostname, { all: true });
-      for (const rec of records) {
-        if (rec.family === 4 && isPrivateOrReservedIPv4(rec.address)) {
-          throw new Error(
-            `Hostname ${hostname} resolves to blocked address ${rec.address}`
-          );
-        }
-        if (rec.family === 6 && isPrivateOrReservedIPv6(rec.address)) {
-          throw new Error(
-            `Hostname ${hostname} resolves to blocked address ${rec.address}`
-          );
-        }
-      }
-    } catch (err) {
-      if (err.message && err.message.startsWith("Hostname")) throw err;
-      // DNS failure – let the crawler surface a normal network error later,
-      // but do not treat unresolved as "safe".
-      throw new Error(`Unable to resolve hostname: ${hostname}`);
+      ipaddr.parse(hostname);
+      isLiteralIp = true;
+    } catch {
+      isLiteralIp = false;
     }
   }
 
-  // Strip credentials if present – we never want to log or forward them
+  let resolvedAddresses = [];
+
+  if (isLiteralIp) {
+    if (isBlockedIp(hostname)) {
+      throw new Error(`Blocked private/reserved address: ${hostname}`);
+    }
+    resolvedAddresses = [hostname];
+  } else if (resolveDns) {
+    let records;
+    try {
+      records = await dns.lookup(hostname, { all: true, verbatim: true });
+    } catch {
+      throw new Error(`Unable to resolve hostname: ${hostname}`);
+    }
+    if (!records || records.length === 0) {
+      throw new Error(`Unable to resolve hostname: ${hostname}`);
+    }
+    for (const rec of records) {
+      if (isBlockedIp(rec.address)) {
+        throw new Error(
+          `Hostname ${hostname} resolves to blocked address ${rec.address}`,
+        );
+      }
+      resolvedAddresses.push(rec.address);
+    }
+  }
+
   parsed.username = "";
   parsed.password = "";
 
   return {
     href: parsed.href,
-    hostname: parsed.hostname,
+    hostname: stripIpv6Brackets(parsed.hostname),
     protocol: parsed.protocol,
+    port,
+    resolvedAddresses,
   };
 }
 
 module.exports = {
   assertSafeScanUrl,
+  isBlockedIp,
   isPrivateOrReservedIPv4,
   isPrivateOrReservedIPv6,
+  stripIpv6Brackets,
+  DEFAULT_ALLOWED_PORTS,
+  BLOCKED_HOSTNAMES,
 };

@@ -121,7 +121,7 @@ async function scan(request) {
   // SSRF guard – mandatory for any programmatic / worker-driven scan
   await assertSafeScanUrl(startUrl, {
     allowHttp: true,
-    resolveDns: false, // enable in production workers if desired
+    resolveDns: true,
   });
 
   const scanId = request.scanId || `scan_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;

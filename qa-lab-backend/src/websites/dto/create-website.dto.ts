@@ -13,7 +13,7 @@ export class CreateWebsiteDto {
   name!: string;
 
   @ApiProperty({ example: 'https://example.com' })
-  @IsUrl({ require_tld: false, protocols: ['http', 'https'] })
+  @IsUrl({ require_tld: true, protocols: ['http', 'https'] })
   @MaxLength(2048)
   url!: string;
 }

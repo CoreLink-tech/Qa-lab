@@ -7,6 +7,7 @@ import { PrismaService } from '../database/prisma.service';
 import { OrganizationRole } from '../generated/prisma/client';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { ProjectsService } from '../projects/projects.service';
+import { assertSafeExternalUrl } from '../common/security/assert-safe-url';
 import { CreateWebsiteDto } from './dto/create-website.dto';
 import { UpdateWebsiteDto } from './dto/update-website.dto';
 
@@ -30,7 +31,7 @@ export class WebsitesService {
       [OrganizationRole.OWNER, OrganizationRole.ADMIN, OrganizationRole.MEMBER],
     );
 
-    const url = dto.url.trim().replace(/\/+$/, '');
+    const url = await assertSafeExternalUrl(dto.url.trim());
 
     try {
       const website = await this.prisma.website.create({
@@ -116,7 +117,7 @@ export class WebsitesService {
         data: {
           ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
           ...(dto.url !== undefined
-            ? { url: dto.url.trim().replace(/\/+$/, '') }
+            ? { url: await assertSafeExternalUrl(dto.url.trim()) }
             : {}),
           ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
         },

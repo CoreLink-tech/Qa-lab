@@ -18,7 +18,7 @@ export class UpdateWebsiteDto {
 
   @ApiPropertyOptional({ example: 'https://example.com' })
   @IsOptional()
-  @IsUrl({ require_tld: false, protocols: ['http', 'https'] })
+  @IsUrl({ require_tld: true, protocols: ['http', 'https'] })
   @MaxLength(2048)
   url?: string;
 

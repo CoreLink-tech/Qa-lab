@@ -1,18 +1,51 @@
-const axios = require("axios");
+/**
+ * Shared HTTP surface for the scanner.
+ * All user-influenced URLs MUST go through safeGet / safePost (SSRF-safe).
+ */
 
-// Shared by every module that fetches a page (crawler, pageScanner) so
-// timeout/UA/etc. are configured once instead of duplicated per module.
-const REQUEST_TIMEOUT_MS = 10000;
-const USER_AGENT = "QA-Lab/1.0 (+https://github.com/CoreLink-tech/Qa-lab)";
+"use strict";
+
+const axios = require("axios");
+const {
+  safeGet,
+  safePost,
+  safeRequest,
+  USER_AGENT,
+  DEFAULT_TIMEOUT_MS,
+} = require("./safeHttp");
+
+const REQUEST_TIMEOUT_MS = DEFAULT_TIMEOUT_MS;
 
 const httpClient = axios.create({
-    timeout: REQUEST_TIMEOUT_MS,
-    headers: {
-        "User-Agent": USER_AGENT
-    }
-    // Deliberately NOT overriding validateStatus: keep axios's default
-    // (reject on non-2xx/3xx) so the existing try/catch + error.response
-    // handling in crawler.js and pageScanner.js keeps working unchanged.
+  timeout: REQUEST_TIMEOUT_MS,
+  maxRedirects: 0,
+  headers: {
+    "User-Agent": USER_AGENT,
+  },
 });
 
-module.exports = { httpClient, REQUEST_TIMEOUT_MS, USER_AGENT };
+httpClient.get = function safeClientGet(url, config = {}) {
+  return safeGet(url, {
+    headers: config.headers,
+    timeoutMs: config.timeout || REQUEST_TIMEOUT_MS,
+    responseType: config.responseType,
+    maxBodyBytes: config.maxContentLength,
+  });
+};
+
+httpClient.post = function safeClientPost(url, data, config = {}) {
+  return safePost(url, data, {
+    headers: config.headers,
+    timeoutMs: config.timeout || REQUEST_TIMEOUT_MS,
+    responseType: config.responseType,
+  });
+};
+
+module.exports = {
+  httpClient,
+  safeGet,
+  safePost,
+  safeRequest,
+  REQUEST_TIMEOUT_MS,
+  USER_AGENT,
+};
