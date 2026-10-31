@@ -4,7 +4,9 @@
 FROM node:22-alpine AS deps
 WORKDIR /app/backend
 COPY qa-lab-backend/package.json qa-lab-backend/package-lock.json ./
-RUN npm ci --omit=dev
+# Production node_modules only. --ignore-scripts: postinstall runs prisma generate
+# which needs the prisma CLI (devDependency) and is handled in the build stage.
+RUN npm ci --omit=dev --ignore-scripts
 
 FROM node:22-alpine AS build
 WORKDIR /app/backend
@@ -35,5 +37,4 @@ CMD ["node", "dist/main.js"]
 
 FROM runtime-base AS worker
 ENV RUN_MODE=worker
-# No HTTP port
 CMD ["node", "dist/main.worker.js"]
