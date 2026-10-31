@@ -5,6 +5,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../database/prisma.service';
 import { OrganizationRole, UserStatus } from '../generated/prisma/client';
+import { EmailService } from '../email/email.service';
 import { AuthService } from './auth.service';
 
 jest.mock('bcryptjs', () => ({
@@ -67,6 +68,7 @@ describe('AuthService', () => {
         AuthService,
         { provide: PrismaService, useValue: prisma },
         { provide: JwtService, useValue: jwt },
+        { provide: EmailService, useValue: { send: jest.fn() } },
         {
           provide: ConfigService,
           useValue: {

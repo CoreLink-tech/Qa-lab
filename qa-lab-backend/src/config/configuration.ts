@@ -18,5 +18,15 @@ export default () => ({
     refreshSecret: process.env.JWT_REFRESH_SECRET,
   },
 
-  corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:3001',
+  trustProxy: process.env.TRUST_PROXY === 'true' || process.env.TRUST_PROXY === '1',
+  cookie: {
+    secure: process.env.COOKIE_SECURE === 'true',
+  },
+  app: {
+    publicUrl: process.env.APP_PUBLIC_URL || 'http://localhost:3001',
+  },
+  email: {
+    mode: process.env.EMAIL_MODE || 'log',
+  },
 });

@@ -1,6 +1,7 @@
 /**
- * Thin fetch client for the QA Lab backend API.
- * Tokens are stored in localStorage (scaffold). Move to httpOnly cookies for production.
+ * QA Lab API client.
+ * Access token: in-memory only (XSS cannot read a long-lived refresh from JS if refresh is httpOnly cookie).
+ * Refresh: httpOnly cookie set by API (credentials: include) with optional body fallback.
  */
 
 const API_URL =
@@ -8,7 +9,7 @@ const API_URL =
 
 export type AuthTokens = {
   accessToken: string;
-  refreshToken: string;
+  refreshToken?: string;
   expiresIn: number;
 };
 
@@ -77,18 +78,18 @@ export type ScanDetail = ScanSummary & {
   } | null;
 };
 
-const TOKEN_KEY = "qalab_tokens";
 const USER_KEY = "qalab_user";
 const ORG_KEY = "qalab_org";
 
-export function getStoredTokens(): AuthTokens | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(TOKEN_KEY);
-    return raw ? (JSON.parse(raw) as AuthTokens) : null;
-  } catch {
-    return null;
-  }
+/** In-memory access token — not persisted to localStorage */
+let accessTokenMemory: string | null = null;
+
+export function getAccessToken(): string | null {
+  return accessTokenMemory;
+}
+
+export function setAccessToken(token: string | null) {
+  accessTokenMemory = token;
 }
 
 export function setStoredSession(
@@ -96,9 +97,13 @@ export function setStoredSession(
   user: UserSummary,
   org?: OrganizationSummary,
 ) {
-  localStorage.setItem(TOKEN_KEY, JSON.stringify(tokens));
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
-  if (org) localStorage.setItem(ORG_KEY, JSON.stringify(org));
+  setAccessToken(tokens.accessToken);
+  if (typeof window !== "undefined") {
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+    if (org) localStorage.setItem(ORG_KEY, JSON.stringify(org));
+    // Clear any legacy token storage
+    localStorage.removeItem("qalab_tokens");
+  }
 }
 
 export function getStoredUser(): UserSummary | null {
@@ -122,17 +127,19 @@ export function getStoredOrg(): OrganizationSummary | null {
 }
 
 export function clearSession() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
-  localStorage.removeItem(ORG_KEY);
+  accessTokenMemory = null;
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(ORG_KEY);
+    localStorage.removeItem("qalab_tokens");
+  }
 }
 
-type RequestOptions = {
-  method?: string;
-  body?: unknown;
-  token?: string | null;
-  auth?: boolean;
-};
+/** @deprecated use getAccessToken */
+export function getStoredTokens(): AuthTokens | null {
+  const t = getAccessToken();
+  return t ? { accessToken: t, expiresIn: 0 } : null;
+}
 
 export class ApiError extends Error {
   constructor(
@@ -144,6 +151,12 @@ export class ApiError extends Error {
     this.name = "ApiError";
   }
 }
+
+type RequestOptions = {
+  method?: string;
+  body?: unknown;
+  auth?: boolean;
+};
 
 export async function api<T>(
   path: string,
@@ -159,16 +172,15 @@ export async function api<T>(
   }
 
   if (auth) {
-    const tokens = getStoredTokens();
-    if (tokens?.accessToken) {
-      headers.Authorization = `Bearer ${tokens.accessToken}`;
-    }
+    const token = getAccessToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
   }
 
   const res = await fetch(`${API_URL}${path}`, {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    credentials: "include",
   });
 
   if (res.status === 204) {
@@ -191,8 +203,6 @@ export async function api<T>(
 
   return data as T;
 }
-
-// ---- Auth ----
 
 export async function register(input: {
   email: string;
@@ -220,18 +230,21 @@ export async function login(input: { email: string; password: string }) {
   return data;
 }
 
+export async function refreshSession() {
+  const data = await api<{
+    user: UserSummary;
+    tokens: AuthTokens;
+    organization?: OrganizationSummary;
+  }>("/auth/refresh", { method: "POST", body: {}, auth: false });
+  setStoredSession(data.tokens, data.user, data.organization);
+  return data;
+}
+
 export async function logout() {
-  const tokens = getStoredTokens();
-  if (tokens?.refreshToken) {
-    try {
-      await api("/auth/logout", {
-        method: "POST",
-        body: { refreshToken: tokens.refreshToken },
-        auth: false,
-      });
-    } catch {
-      /* ignore */
-    }
+  try {
+    await api("/auth/logout", { method: "POST", body: {}, auth: false });
+  } catch {
+    /* ignore */
   }
   clearSession();
 }
@@ -243,15 +256,15 @@ export async function fetchMe() {
     firstName?: string | null;
     lastName?: string | null;
     status: string;
+    emailVerifiedAt?: string | null;
     organizations: OrganizationSummary[];
   }>("/auth/me");
 }
 
-// ---- Domain ----
-
 export const organizations = {
   list: () => api<OrganizationSummary[]>("/organizations"),
-  get: (id: string) => api<OrganizationSummary & { members?: unknown[] }>(`/organizations/${id}`),
+  get: (id: string) =>
+    api<OrganizationSummary & { members?: unknown[] }>(`/organizations/${id}`),
   create: (body: { name: string; slug?: string }) =>
     api<OrganizationSummary>("/organizations", { method: "POST", body }),
 };
@@ -293,8 +306,6 @@ export const scans = {
       method: "POST",
     }),
 };
-
-// ---- API keys & schedules ----
 
 export type ApiKeySummary = {
   id: string;

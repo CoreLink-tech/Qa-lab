@@ -51,8 +51,16 @@ model User {
   status          UserStatus @default(ACTIVE)
   emailVerifiedAt DateTime?
 
+  /// Failed password attempts since last successful login
+  failedLoginCount Int      @default(0)
+  lockedUntil      DateTime?
+
+  emailVerifyTokenHash String?
+  emailVerifyExpiresAt DateTime?
+
   memberships     OrganizationMember[]
   refreshTokens   RefreshToken[]
+  passwordResets  PasswordResetToken[]
   apiKeys         ApiKey[]
   auditLogs       AuditLog[]
 
@@ -61,6 +69,7 @@ model User {
 
   @@index([status])
   @@index([createdAt])
+  @@index([lockedUntil])
 }
 
 model Organization {
@@ -196,6 +205,11 @@ model RefreshToken {
   userAgent   String?
   ipAddress   String?
 
+  /// Rotation family id — reuse of a revoked token revokes the whole family
+  familyId    String
+  /// True after this token was rotated to a successor
+  replacedAt  DateTime?
+
   user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   createdAt   DateTime @default(now())
@@ -203,6 +217,7 @@ model RefreshToken {
   @@index([userId])
   @@index([expiresAt])
   @@index([userId, revokedAt])
+  @@index([familyId])
 }
 
 model ApiKey {
@@ -286,4 +301,20 @@ model ScanSchedule {
 
   @@index([websiteId])
   @@index([enabled, nextRunAt])
+}
+
+
+model PasswordResetToken {
+  id          String   @id @default(uuid())
+  userId      String
+  tokenHash   String   @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }

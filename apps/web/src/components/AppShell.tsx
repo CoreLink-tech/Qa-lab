@@ -6,9 +6,10 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   clearSession,
   getStoredOrg,
-  getStoredTokens,
+  getAccessToken,
   getStoredUser,
   logout,
+  refreshSession,
   type OrganizationSummary,
   type UserSummary,
 } from "@/lib/api";
@@ -29,14 +30,28 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const tokens = getStoredTokens();
-    if (!tokens?.accessToken) {
-      router.replace("/login");
-      return;
+    let cancelled = false;
+    async function boot() {
+      try {
+        if (!getAccessToken()) {
+          await refreshSession();
+        }
+        if (cancelled) return;
+        if (!getAccessToken()) {
+          router.replace("/login");
+          return;
+        }
+        setUser(getStoredUser());
+        setOrg(getStoredOrg());
+        setReady(true);
+      } catch {
+        if (!cancelled) router.replace("/login");
+      }
     }
-    setUser(getStoredUser());
-    setOrg(getStoredOrg());
-    setReady(true);
+    void boot();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   async function handleLogout() {

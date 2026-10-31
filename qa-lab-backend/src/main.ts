@@ -9,6 +9,10 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  if (process.env.TRUST_PROXY === 'true' || process.env.TRUST_PROXY === '1') {
+    app.set('trust proxy', 1);
+  }
+
   app.use(helmet());
   app.use(compression());
   app.use(cookieParser());
