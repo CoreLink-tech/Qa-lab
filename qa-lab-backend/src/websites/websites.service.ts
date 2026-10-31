@@ -8,6 +8,7 @@ import { PrismaService } from '../database/prisma.service';
 import { OrganizationRole } from '../generated/prisma/client';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { ProjectsService } from '../projects/projects.service';
+import { QuotasService } from '../quotas/quotas.service';
 import { assertSafeExternalUrl } from '../common/security/assert-safe-url';
 import { CreateWebsiteDto } from './dto/create-website.dto';
 import { UpdateWebsiteDto } from './dto/update-website.dto';
@@ -32,6 +33,9 @@ export class WebsitesService {
       [OrganizationRole.OWNER, OrganizationRole.ADMIN, OrganizationRole.MEMBER],
     );
 
+    const project = await this.prisma.project.findUnique({ where: { id: dto.projectId } });
+    if (!project) throw new NotFoundException('Project not found');
+    await this.quotas.assertCanAddWebsite(project.organizationId);
     const url = await assertSafeExternalUrl(dto.url.trim());
 
     try {

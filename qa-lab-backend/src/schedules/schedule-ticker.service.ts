@@ -14,6 +14,11 @@ export class ScheduleTickerService implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly schedules: SchedulesService) {}
 
   onModuleInit(): void {
+    const mode = (process.env.RUN_MODE || 'all').toLowerCase();
+    if (mode === 'api') {
+      this.logger.log('RUN_MODE=api — schedule ticker not started');
+      return;
+    }
     this.timer = setInterval(() => {
       void this.tick();
     }, 60_000);

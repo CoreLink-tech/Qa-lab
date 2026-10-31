@@ -17,6 +17,8 @@ import { SchedulesModule } from './schedules/schedules.module';
 import { AuditModule } from './audit/audit.module';
 import { QueueModule } from './queue/queue.module';
 import { EmailModule } from './email/email.module';
+import { QuotasModule } from './quotas/quotas.module';
+import { DomainVerifyModule } from './domain-verify/domain-verify.module';
 import { ThrottlerRedisStorage } from './common/throttler-redis.storage';
 
 @Module({
@@ -45,6 +47,8 @@ import { ThrottlerRedisStorage } from './common/throttler-redis.storage';
     QueueModule,
     AuditModule,
     EmailModule,
+    QuotasModule,
+    DomainVerifyModule,
     HealthModule,
     AuthModule,
     OrganizationsModule,

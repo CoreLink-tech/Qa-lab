@@ -10,6 +10,8 @@ import { OrganizationsService } from '../organizations/organizations.service';
 import { SCAN_QUEUE_NAME, type ScanJobPayload } from '../queue/queue.constants';
 import { ScanQueueService } from '../queue/scan-queue.service';
 import { WebsitesService } from '../websites/websites.service';
+import { QuotasService } from '../quotas/quotas.service';
+import { DomainVerifyService } from '../domain-verify/domain-verify.service';
 import { CreateScanDto } from './dto/create-scan.dto';
 
 @Injectable()
@@ -21,6 +23,8 @@ export class ScansService {
     private readonly websites: WebsitesService,
     private readonly organizations: OrganizationsService,
     private readonly scanQueue: ScanQueueService,
+    private readonly quotas: QuotasService,
+    private readonly domainVerify: DomainVerifyService,
   ) {}
 
 
@@ -113,8 +117,18 @@ export class ScansService {
       throw new BadRequestException('Website is inactive');
     }
 
+    const orgId = website.project.organizationId;
+    const { maxPages: allowedPages } = await this.quotas.assertCanCreateScan(
+      orgId,
+      dto.maxPages,
+    );
+
+    if (dto.checkExposedPaths) {
+      await this.domainVerify.assertVerified(website.id);
+    }
+
     const options = {
-      maxPages: dto.maxPages ?? 50,
+      maxPages: allowedPages,
       maxDepth: dto.maxDepth ?? 2,
       concurrency: dto.concurrency ?? 5,
       respectRobotsTxt: dto.respectRobotsTxt ?? true,

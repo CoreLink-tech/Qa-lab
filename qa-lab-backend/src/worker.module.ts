@@ -8,6 +8,7 @@ import { QueueModule } from './queue/queue.module';
 import { ScanProcessor } from './scans/scan.processor';
 import { OrgConcurrencyLimiter } from './scans/org-concurrency.limiter';
 import { ScanReaperService } from './scans/scan-reaper.service';
+import { SchedulesModule } from './schedules/schedules.module';
 
 /**
  * Minimal module for the dedicated worker process.
@@ -23,6 +24,7 @@ import { ScanReaperService } from './scans/scan-reaper.service';
     DatabaseModule,
     RedisModule,
     QueueModule,
+    SchedulesModule,
   ],
   providers: [OrgConcurrencyLimiter, ScanProcessor, ScanReaperService],
 })
