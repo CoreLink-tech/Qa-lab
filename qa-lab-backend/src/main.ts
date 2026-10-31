@@ -5,9 +5,15 @@ import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { StructuredLogger } from './observability/structured-logger';
+import { initErrorTracking } from './observability/error-tracking';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  initErrorTracking();
+
+  const app = await NestFactory.create(AppModule, {
+    logger: new StructuredLogger('Bootstrap'),
+  });
 
   if (process.env.TRUST_PROXY === 'true' || process.env.TRUST_PROXY === '1') {
     app.set('trust proxy', 1);
@@ -47,6 +53,13 @@ async function bootstrap() {
 }
 
 bootstrap().catch((error: unknown) => {
-  console.error('Failed to start QA Lab backend:', error);
+  console.error(
+    JSON.stringify({
+      ts: new Date().toISOString(),
+      level: 'error',
+      message: 'Failed to start QA Lab backend',
+      error: error instanceof Error ? error.message : String(error),
+    }),
+  );
   process.exit(1);
 });

@@ -1,6 +1,6 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import configuration from './config/configuration';
 import { validateEnvironment } from './config/env.validation';
@@ -19,6 +19,10 @@ import { QueueModule } from './queue/queue.module';
 import { EmailModule } from './email/email.module';
 import { QuotasModule } from './quotas/quotas.module';
 import { DomainVerifyModule } from './domain-verify/domain-verify.module';
+import { ObservabilityModule } from './observability/observability.module';
+import { RetentionModule } from './retention/retention.module';
+import { RequestIdMiddleware } from './observability/request-id.middleware';
+import { HttpLoggingInterceptor } from './observability/http-logging.interceptor';
 import { ThrottlerRedisStorage } from './common/throttler-redis.storage';
 
 @Module({
@@ -49,6 +53,8 @@ import { ThrottlerRedisStorage } from './common/throttler-redis.storage';
     EmailModule,
     QuotasModule,
     DomainVerifyModule,
+    ObservabilityModule,
+    RetentionModule,
     HealthModule,
     AuthModule,
     OrganizationsModule,
@@ -63,6 +69,14 @@ import { ThrottlerRedisStorage } from './common/throttler-redis.storage';
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
     },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: HttpLoggingInterceptor,
+    },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(RequestIdMiddleware).forRoutes('*');
+  }
+}

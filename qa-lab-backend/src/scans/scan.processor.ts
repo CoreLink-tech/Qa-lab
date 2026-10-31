@@ -9,6 +9,7 @@ import {
 } from '../queue/queue.constants';
 import { getScannerLibrary } from './scanner-bridge';
 import { OrgConcurrencyLimiter } from './org-concurrency.limiter';
+import { metrics } from '../observability/metrics';
 
 const DEFAULT_SCAN_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes wall clock
 const DEFAULT_MAX_PAGES = 50;
@@ -210,6 +211,20 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
         summary: result.summary ?? {},
       };
 
+      const reportStr = JSON.stringify(reportJson);
+      const maxBytes = Number(process.env.REPORT_JSON_MAX_BYTES) || 2_000_000;
+      if (Buffer.byteLength(reportStr, 'utf8') > maxBytes) {
+        // Truncate findings to fit
+        reportJson.findings = findings.slice(0, 100);
+        reportJson.summary = {
+          ...(reportJson.summary as object),
+          truncated: true,
+          originalFindingCount: findings.length,
+        };
+      }
+
+      metrics.scansCompleted.inc();
+
       await this.prisma.$transaction([
         this.prisma.report.create({
           data: {
@@ -251,6 +266,7 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
         },
       });
 
+      metrics.scansFailed.inc();
       throw error;
     } finally {
       await this.orgLimiter.release(organizationId);

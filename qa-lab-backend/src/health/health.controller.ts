@@ -20,6 +20,23 @@ export class HealthController {
     private readonly redis: RedisService,
   ) {}
 
+  /** Liveness — process is up (no dependency checks). */
+  @Get('live')
+  live() {
+    return { status: 'ok' };
+  }
+
+  /** Readiness — DB + Redis must be reachable. */
+  @Get('ready')
+  @HealthCheck()
+  ready() {
+    return this.health.check([
+      () => this.prismaHealth.pingCheck('database', this.prisma),
+      () => this.redisHealth.pingCheck('redis', this.redis),
+    ]);
+  }
+
+  /** Full health (legacy + detailed). */
   @Get()
   @HealthCheck()
   check() {
