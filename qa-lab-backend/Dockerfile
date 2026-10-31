@@ -3,15 +3,15 @@
 #   docker build -f qa-lab-backend/Dockerfile --target worker -t qa-lab-worker .
 FROM node:22-alpine AS deps
 WORKDIR /app/backend
-COPY qa-lab-backend/package.json qa-lab-backend/package-lock.json ./
-# Production node_modules only. --ignore-scripts: postinstall runs prisma generate
-# which needs the prisma CLI (devDependency) and is handled in the build stage.
+COPY qa-lab-backend/package.json qa-lab-backend/package-lock.json qa-lab-backend/.npmrc ./
+# Production node_modules only. Skip lifecycle scripts (postinstall needs prisma CLI).
 RUN npm ci --omit=dev --ignore-scripts
 
 FROM node:22-alpine AS build
 WORKDIR /app/backend
-COPY qa-lab-backend/package.json qa-lab-backend/package-lock.json ./
-RUN npm ci
+COPY qa-lab-backend/package.json qa-lab-backend/package-lock.json qa-lab-backend/.npmrc ./
+# Skip postinstall during ci; generate Prisma client after sources are copied.
+RUN npm ci --ignore-scripts
 COPY qa-lab-backend/ ./
 ENV DATABASE_URL=postgresql://prisma:prisma@127.0.0.1:5432/prisma?schema=public
 RUN npx prisma generate && npm run build
