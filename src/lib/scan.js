@@ -29,6 +29,7 @@ const { checkExposedPaths } = require("../exposedPathsChecker");
 const { buildReportData } = require("../reportData");
 const generateReport = require("../report");
 const { createJsonReportWriter } = require("../jsonReportWriter");
+const { assertSafeScanUrl } = require("../utils/ssrfGuard");
 
 /**
  * @typedef {Object} ScanRequest
@@ -117,6 +118,12 @@ async function scan(request) {
   }
 
   const startUrl = request.startUrl.trim();
+  // SSRF guard – mandatory for any programmatic / worker-driven scan
+  await assertSafeScanUrl(startUrl, {
+    allowHttp: true,
+    resolveDns: false, // enable in production workers if desired
+  });
+
   const scanId = request.scanId || `scan_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   const startedAt = new Date().toISOString();
   const maxPages = Math.max(1, request.maxPages ?? 100);
