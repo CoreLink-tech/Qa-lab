@@ -142,6 +142,7 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
 
       const { scan: runScan } = getScannerLibrary();
 
+      const controller = new AbortController();
       const result = await this.withTimeout(
         runScan({
           startUrl: scan.website.url,
@@ -153,6 +154,7 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
           checkExposedPaths: (options.checkExposedPaths as boolean) ?? false,
           checkAssets: (options.checkAssets as boolean) ?? false,
           writeReports: false,
+          signal: controller.signal,
           onProgress: (event: {
             type?: string;
             pagesScanned?: number;
@@ -169,6 +171,7 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
         }),
         this.scanTimeoutMs,
         scanId,
+        controller,
       );
 
       const current = await this.prisma.scan.findUnique({
@@ -273,14 +276,27 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Race the scan promise against a wall-clock timer. On timeout, abort the
+   * AbortController so the scanner/crawler can stop fetching new pages
+   * instead of only rejecting the outer promise while work continues.
+   */
   private withTimeout<T>(
     promise: Promise<T>,
     ms: number,
     scanId: string,
+    controller?: AbortController,
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
-        reject(new Error(`Scan ${scanId} exceeded wall-clock timeout of ${ms}ms`));
+        try {
+          controller?.abort();
+        } catch {
+          /* ignore */
+        }
+        reject(
+          new Error(`Scan ${scanId} exceeded wall-clock timeout of ${ms}ms`),
+        );
       }, ms);
       promise
         .then((v) => {

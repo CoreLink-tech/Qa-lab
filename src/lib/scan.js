@@ -184,6 +184,7 @@ async function scan(request) {
       useSitemap: Boolean(request.useSitemap),
       includePatterns: request.includePatterns,
       excludePatterns: request.excludePatterns,
+      signal: request.signal,
       onPage: async (rawPage) => {
         if (request.signal?.aborted) {
           const err = new Error("Scan cancelled");

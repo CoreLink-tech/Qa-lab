@@ -41,12 +41,23 @@ async function crawlSite(startUrl, options = {}) {
         // level's worth of pages (fetchedLevel) is ever held at once
         // regardless of this option -- that part of the crawler was
         // already bounded per-level, not per-site.
-        onPage = null
+        onPage = null,
+        // Optional AbortSignal — when aborted, stop scheduling new fetches.
+        signal = null,
     } = options;
 
     // Sitemap discovery can use robots.txt's Sitemap: directive, so fetch
     // robots.txt whenever either feature needs it -- once, shared by both.
-    const needsRobotsTxt = respectRobots || useSitemap;
+
+    function assertNotAborted() {
+        if (signal && signal.aborted) {
+            const err = new Error("Scan cancelled");
+            err.name = "AbortError";
+            throw err;
+        }
+    }
+
+        const needsRobotsTxt = respectRobots || useSitemap;
     const robotsRules = needsRobotsTxt ? await fetchRobotsRules(startUrl) : null;
 
     const sitemapUrls = useSitemap ? await discoverSitemapUrls(startUrl, robotsRules) : [];
@@ -69,6 +80,7 @@ async function crawlSite(startUrl, options = {}) {
     let robotsBlockedCount = 0;
 
     while (currentLevel.length > 0 && pageCount < maxPages) {
+        assertNotAborted();
 
         const remainingBudget = maxPages - pageCount;
         const levelToFetch = currentLevel.slice(0, remainingBudget);
