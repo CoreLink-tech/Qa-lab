@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+  HttpException,
+} from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { OrganizationRole, ScanStatus, ScanTrigger } from '../generated/prisma/client';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -7,7 +13,6 @@ import { ScanQueueService } from '../queue/scan-queue.service';
 import { AuditService } from '../audit/audit.service';
 import { QuotasService } from '../quotas/quotas.service';
 import { DomainVerifyService } from '../domain-verify/domain-verify.service';
-import { BadRequestException, HttpException } from '@nestjs/common';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
 
 @Injectable()
