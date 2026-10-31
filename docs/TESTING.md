@@ -16,7 +16,12 @@ Exclusions: generated Prisma client, `main.ts` / `main.worker.ts`, Nest modules.
 - Tests: `src/auth/guards/idor.matrix.spec.ts` + service boundary tests
 
 ## Integration (CI)
-GitHub Actions `backend` job uses Postgres + Redis service containers, runs migrate + unit tests.
+GitHub Actions `backend` job uses Postgres + Redis service containers, runs migrate + unit tests + **e2e health** (`npm run test:e2e`).
+
+```bash
+cd qa-lab-backend && npm run test:e2e
+```
+
 
 ## Load smoke
 ```bash

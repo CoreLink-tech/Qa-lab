@@ -26,7 +26,7 @@ describe('Health (e2e)', () => {
     app.setGlobalPrefix('api');
 
     await app.init();
-  });
+  }, 60_000);
 
   afterAll(async () => {
     await app.close();
@@ -34,17 +34,38 @@ describe('Health (e2e)', () => {
 
   interface HealthCheckResponseBody {
     status: string;
-    details: Record<string, { status: string }>;
+    details?: Record<string, { status: string }>;
   }
 
-  it('GET /api/health returns ok status with a memory heap check', () => {
+  it('GET /api/health/live returns ok', () => {
+    return request(app.getHttpServer())
+      .get('/api/health/live')
+      .expect(200)
+      .expect((res) => {
+        expect(res.body).toMatchObject({ status: 'ok' });
+      });
+  });
+
+  it('GET /api/health/ready returns ok when DB and Redis are up', () => {
+    return request(app.getHttpServer())
+      .get('/api/health/ready')
+      .expect(200)
+      .expect((res) => {
+        const body = res.body as HealthCheckResponseBody;
+        expect(body.status).toBe('ok');
+        expect(body.details?.database?.status).toBe('up');
+        expect(body.details?.redis?.status).toBe('up');
+      });
+  });
+
+  it('GET /api/health returns ok with memory and dependency checks', () => {
     return request(app.getHttpServer())
       .get('/api/health')
       .expect(200)
       .expect((res) => {
         const body = res.body as HealthCheckResponseBody;
         expect(body.status).toBe('ok');
-        expect(body.details.memory_heap.status).toBe('up');
+        expect(body.details?.memory_heap?.status).toBe('up');
       });
   });
 

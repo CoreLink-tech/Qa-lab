@@ -91,6 +91,8 @@ jobs:
       - name: Unit tests with coverage
         run: npm run test:cov
         continue-on-error: true
+      - name: E2E health
+        run: npm run test:e2e
       - name: Audit (high+)
         run: npm audit --omit=dev --audit-level=high || true
 
