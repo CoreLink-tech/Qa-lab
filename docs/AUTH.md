@@ -9,7 +9,10 @@
 
 ## Email
 - `EMAIL_MODE=log` (default): verification/reset links logged by the API.
-- Configure a real SMTP adapter before production open registration.
+- `EMAIL_MODE=smtp`: deliver via nodemailer.
+  - Required: `SMTP_HOST`
+  - Optional: `SMTP_PORT` (default 587), `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`
+- Configure SMTP before production open registration.
 
 ## Cookies / CORS
 - Browser: `credentials: "include"`.

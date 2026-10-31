@@ -28,5 +28,14 @@ export default () => ({
   },
   email: {
     mode: process.env.EMAIL_MODE || 'log',
+    from: process.env.EMAIL_FROM || 'QA Lab <noreply@localhost>',
+    smtp: {
+      host: process.env.SMTP_HOST || '',
+      port: parseInt(process.env.SMTP_PORT || '587', 10),
+      secure:
+        process.env.SMTP_SECURE === 'true' || process.env.SMTP_SECURE === '1',
+      user: process.env.SMTP_USER || undefined,
+      pass: process.env.SMTP_PASS || undefined,
+    },
   },
 });
