@@ -3,12 +3,19 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { createHash, randomBytes, timingSafeEqual } from 'crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../database/prisma.service';
 import { OrganizationRole } from '../generated/prisma/client';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateApiKeyDto } from './dto/create-api-key.dto';
+
+/** Digest for high-entropy API tokens (not user passwords). */
+function hashApiKeyMaterial(rawKey: string): string {
+  // HMAC-SHA256 over random API tokens — not a password-hashing scheme.
+  const pepper = process.env.API_KEY_PEPPER || process.env.JWT_ACCESS_SECRET || 'qalab-api-key-v1';
+  return createHmac('sha256', pepper).update(rawKey, 'utf8').digest('hex');
+}
 
 @Injectable()
 export class ApiKeysService {
@@ -27,7 +34,7 @@ export class ApiKeysService {
 
     const rawKey = `qalab_${randomBytes(24).toString('base64url')}`;
     const prefix = rawKey.slice(0, 12);
-    const keyHash = createHash('sha256').update(rawKey).digest('hex');
+    const keyHash = hashApiKeyMaterial(rawKey);
 
     const record = await this.prisma.apiKey.create({
       data: {
@@ -120,7 +127,7 @@ export class ApiKeysService {
       return null;
     }
 
-    const keyHash = createHash('sha256').update(rawKey).digest('hex');
+    const keyHash = hashApiKeyMaterial(rawKey);
     const keyHashBuf = Buffer.from(keyHash, 'hex');
 
     // Lookup by hash (indexed unique). Still compare with timingSafeEqual.

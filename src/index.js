@@ -50,13 +50,20 @@ async function main() {
     const delayArg = args.find(arg => arg.startsWith("--delay="));
     const delayMs = delayArg ? Math.max(0, parseInt(delayArg.split("=")[1], 10) || 0) : 0;
 
+    function escapeRegExpLiteral(pattern) {
+        // Treat CLI include/exclude values as literals — never compile raw user regex
+        // (avoids Regular expression injection / ReDoS from hostile patterns).
+        return String(pattern).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+
     function compileRegexFlags(flagPrefix) {
         return args
             .filter(arg => arg.startsWith(flagPrefix))
             .map(arg => arg.slice(flagPrefix.length))
+            .filter(pattern => pattern.length > 0 && pattern.length <= 200)
             .map(pattern => {
                 try {
-                    return new RegExp(pattern);
+                    return new RegExp(escapeRegExpLiteral(pattern));
                 } catch {
                     console.error(`Ignoring invalid pattern for ${flagPrefix}: ${pattern}`);
                     return null;

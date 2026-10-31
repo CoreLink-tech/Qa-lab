@@ -20,7 +20,7 @@ const SIGNATURES = [
         category: "E-commerce",
         test: (ctx) =>
             ctx.headers["x-shopify-stage"] !== undefined ||
-            ctx.resourcePaths.some(p => /cdn\.shopify\.com/.test(p)) ||
+            ctx.resourcePaths.some(p => typeof p === "string" && (p.includes("://cdn.shopify.com/") || p.includes("//cdn.shopify.com/"))) ||
             ctx.cookieNames.some(c => /_shopify_|cart_currency/i.test(c))
     },
     {
@@ -28,21 +28,21 @@ const SIGNATURES = [
         category: "Website Builder",
         test: (ctx) =>
             /wix/i.test(ctx.generator) ||
-            ctx.resourcePaths.some(p => /static\.wixstatic\.com/.test(p))
+            ctx.resourcePaths.some(p => typeof p === "string" && (p.includes("://static.wixstatic.com/") || p.includes("//static.wixstatic.com/")))
     },
     {
         name: "Squarespace",
         category: "Website Builder",
         test: (ctx) =>
             /squarespace/i.test(ctx.generator) ||
-            ctx.resourcePaths.some(p => /squarespace\.com/.test(p))
+            ctx.resourcePaths.some(p => typeof p === "string" && p.includes("squarespace.com"))
     },
     {
         name: "Webflow",
         category: "Website Builder",
         test: (ctx) =>
             /webflow/i.test(ctx.generator) ||
-            ctx.resourcePaths.some(p => /website-files\.com/.test(p))
+            ctx.resourcePaths.some(p => typeof p === "string" && p.includes("website-files.com"))
     },
     {
         name: "Drupal",
@@ -77,7 +77,7 @@ const SIGNATURES = [
         name: "ASP.NET",
         category: "Language / Runtime",
         test: (ctx) =>
-            ctx.headers["x-powered-by"]?.toLowerCase().includes("asp.net") ||
+            String(ctx.headers["x-powered-by"] || "").toLowerCase().indexOf("asp.net") !== -1 ||
             ctx.headers["x-aspnet-version"] !== undefined ||
             ctx.cookieNames.some(c => c.toUpperCase() === "ASP.NET_SESSIONID")
     },

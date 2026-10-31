@@ -467,7 +467,8 @@ export class AuthService {
         .toLowerCase()
         .trim()
         .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
+        .replace(/^-+/, '')
+        .replace(/-+$/, '')
         .slice(0, 60) || 'workspace'
     );
   }

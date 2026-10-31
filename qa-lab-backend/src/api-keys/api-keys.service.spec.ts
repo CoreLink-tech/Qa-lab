@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHmac } from 'crypto';
 import { ApiKeysService } from './api-keys.service';
 
 describe('ApiKeysService.validateRawKey', () => {
@@ -33,7 +33,7 @@ describe('ApiKeysService.validateRawKey', () => {
 
   it('rejects revoked keys', async () => {
     const raw = 'qalab_testkeyvalue123456789012';
-    const keyHash = createHash('sha256').update(raw).digest('hex');
+    const keyHash = createHmac('sha256', process.env.JWT_ACCESS_SECRET || 'qalab-api-key-v1').update(raw, 'utf8').digest('hex');
     prisma.apiKey.findUnique.mockResolvedValue({
       id: 'k1',
       keyHash,
@@ -49,7 +49,7 @@ describe('ApiKeysService.validateRawKey', () => {
 
   it('accepts valid key and touches lastUsedAt', async () => {
     const raw = 'qalab_testkeyvalue123456789012';
-    const keyHash = createHash('sha256').update(raw).digest('hex');
+    const keyHash = createHmac('sha256', process.env.JWT_ACCESS_SECRET || 'qalab-api-key-v1').update(raw, 'utf8').digest('hex');
     prisma.apiKey.findUnique.mockResolvedValue({
       id: 'k1',
       keyHash,
