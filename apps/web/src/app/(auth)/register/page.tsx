@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { Alert, Button, Card, Input } from "@/components/ui";
 import { ApiError, register } from "@/lib/api";
+import { validateEmail, validatePassword } from "@/lib/validation";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -24,6 +25,16 @@ export default function RegisterPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    const emailErr = validateEmail(form.email);
+    if (emailErr) {
+      setError(emailErr);
+      return;
+    }
+    const passErr = validatePassword(form.password);
+    if (passErr) {
+      setError(passErr);
+      return;
+    }
     setLoading(true);
     try {
       await register({

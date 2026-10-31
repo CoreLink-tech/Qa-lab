@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { Alert, Button, Card, Input } from "@/components/ui";
 import { ApiError, login } from "@/lib/api";
+import { validateEmail } from "@/lib/validation";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,6 +17,15 @@ export default function LoginPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    const emailErr = validateEmail(email);
+    if (emailErr) {
+      setError(emailErr);
+      return;
+    }
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
+      return;
+    }
     setLoading(true);
     try {
       await login({ email, password });
