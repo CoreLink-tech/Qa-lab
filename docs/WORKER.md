@@ -27,6 +27,10 @@ npm run start:worker:dev
 - Stalled job detection enabled
 - Idempotent skip if scan already COMPLETED/CANCELLED
 
+## Cancellation
+- Wall-clock timeout creates an `AbortController` and aborts it when the timer fires.
+- The library `scan()` and `crawlSite` check the signal between levels; `safeHttp` passes `signal` to axios so in-flight requests can cancel.
+
 ## Ops notes
 - Run migrations as a one-shot, not inside every worker/api replica.
 - Prefer egress controls so workers cannot reach cloud metadata / private ranges (SSRF guard is application-level defense-in-depth).

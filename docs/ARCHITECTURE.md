@@ -88,12 +88,12 @@ Quotas live on Organization. Domain verification fields on Website.
 
 ## 8. Known limitations
 
-1. Email delivery is **log-only** unless an SMTP adapter is configured (`EMAIL_MODE`).
+1. Email defaults to **log-only**. Real delivery requires `EMAIL_MODE=smtp` and `SMTP_*` (nodemailer adapter).
 2. TOTP 2FA is **not** implemented.
 3. CSRF double-submit for pure cookie SPA mutations is **not** fully implemented (Bearer access + SameSite refresh).
 4. Coverage gates are **baseline** (~35%), not 80%.
 5. No Playwright e2e in CI yet.
-6. Scanner timeout does not always hard-kill in-flight HTTP.
+6. Worker timeout aborts via `AbortSignal` (crawler + safeHttp/axios). Residual: a request already in flight may finish before cancel takes effect.
 7. CSP allows `'unsafe-inline'` / `'unsafe-eval'` for Next.js compatibility.
 8. Plan tiers are enforced in code defaults; **no billing** integration.
 9. Metrics are **per process**; scrape each replica.
