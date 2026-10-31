@@ -209,7 +209,7 @@ export class ScansService {
       if (scan.website.project.organizationId !== principal.organizationId) {
         throw new NotFoundException('Scan not found');
       }
-      return this.getById(scan.website.projectId ? (principal.userId || 'api') : 'api', scanId).catch(async () => {
+      return this.getOne(scan.website.projectId ? (principal.userId || 'api') : 'api', scanId).catch(async () => {
         // Fallback shape without user membership
         return {
           id: scan.id,
@@ -232,7 +232,7 @@ export class ScansService {
         };
       });
     }
-    return this.getById(principal.userId || principal.id, scanId);
+    return this.getOne(principal.userId || principal.id, scanId);
   }
 
   private async listByWebsiteInternal(websiteId: string) {

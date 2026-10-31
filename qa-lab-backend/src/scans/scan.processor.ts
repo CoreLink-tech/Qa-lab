@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { ConfigService } from '@nestjs/config';
 import { Job, Worker } from 'bullmq';
 import { PrismaService } from '../database/prisma.service';
-import { ScanStatus } from '../generated/prisma/client';
+import { Prisma, ScanStatus } from '../generated/prisma/client';
 import {
   SCAN_QUEUE_NAME,
   type ScanJobPayload,
@@ -232,7 +232,7 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
             score: Math.round(result.overallScore ?? 0),
             grade: result.grade ?? 'F',
             issueCount: findings.length,
-            reportJson,
+            reportJson: reportJson as Prisma.InputJsonValue,
             reportHtml: null,
           },
         }),
