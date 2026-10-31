@@ -68,18 +68,24 @@ export function Button({
 export function Input({
   label,
   className = "",
+  id,
   ...props
 }: InputHTMLAttributes<HTMLInputElement> & { label?: string }) {
+  const inputId =
+    id || (label ? label.toLowerCase().replace(/\s+/g, "-") : undefined);
   return (
-    <label className="block space-y-1.5">
+    <div className="block space-y-1.5">
       {label ? (
-        <span className="text-sm font-medium text-slate-700">{label}</span>
+        <label htmlFor={inputId} className="text-sm font-medium text-slate-700">
+          {label}
+        </label>
       ) : null}
       <input
+        id={inputId}
         className={`w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 ${className}`}
         {...props}
       />
-    </label>
+    </div>
   );
 }
 
