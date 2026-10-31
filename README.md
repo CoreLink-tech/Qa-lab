@@ -1,67 +1,100 @@
 # QA Lab
 
-> Website Quality Assurance platform — CLI scanner, API, workers, and dashboard.
+Website quality-assurance platform: **CLI scanner**, **NestJS API**, **BullMQ worker**, and **Next.js dashboard**.
 
-## Platform overview
+This README matches the codebase on `main`. Marketing language is avoided on purpose.
 
-| Component | Path | Port |
-|-----------|------|------|
-| CLI scanner | `src/` | — |
-| API + worker | `qa-lab-backend/` | 3000 |
+## Components
+
+| Component | Path | Default port |
+|-----------|------|----------------|
+| Scanner CLI / library | `src/` | — |
+| API | `qa-lab-backend/` (`RUN_MODE=api`) | 3000 |
+| Worker | `qa-lab-backend/` (`RUN_MODE=worker`) | — |
 | Dashboard | `apps/web/` | 3001 |
 | Postgres + Redis | `docker-compose.yml` | 5432 / 6379 |
 
-### Quick start (full stack)
+## Quick start (local)
 
 ```bash
-# Infrastructure
 docker compose up -d
 
-# Backend
 cd qa-lab-backend
-cp .env.example .env   # set JWT_ACCESS_SECRET and JWT_REFRESH_SECRET (≥32 chars)
+cp .env.example .env   # JWT_ACCESS_SECRET and JWT_REFRESH_SECRET ≥ 32 chars
 # CORS_ORIGIN=http://localhost:3001
-npm install
+npm ci
 npx prisma migrate deploy
-npx prisma generate
+npm run prisma:generate
+# Dev all-in-one (API + in-process worker):
 npm run start:dev
+# Production-like split:
+# RUN_MODE=api npm run start:dev
+# npm run start:worker:dev
 
-# Dashboard (new terminal)
-cd apps/web
+cd ../apps/web
 cp .env.example .env.local
-npm install
+npm ci
 npm run dev
 ```
 
-Open http://localhost:3001 → register → create project → add website → **Run scan**.
+- UI: http://localhost:3001  
+- Swagger: http://localhost:3000/api/docs  
+- Health: http://localhost:3000/api/health/ready  
 
-API docs: http://localhost:3000/api/docs
+## What works end-to-end
 
-### API surface
+1. Register / login (refresh cookie + access token).
+2. Organization → project → website.
+3. Domain verification (required for schedules and exposed-path probes).
+4. Queue a scan (JWT or API key with `scans:write`).
+5. Worker runs scanner (SSRF-checked), stores report.
+6. View scan detail / download JSON in the UI.
+7. Schedules (verified domains), quotas, API keys, audit log rows.
 
-- `POST /api/auth/register|login|refresh|logout` · `GET /api/auth/me`
-- Organizations, projects, websites (CRUD)
-- `POST /api/scans` · list/get/cancel
-- `POST /api/schedules` · recurring scans (ticker every 60s)
-- `POST /api/api-keys` · create (shown once) / list / revoke
+## Security (brief)
 
-### Security notes
+- SSRF hardening on outbound fetch (see `src/utils/ssrfGuard.js`, `safeHttp.js`).
+- Passive security rules only in the scanner.
+- bcrypt cost 12; refresh token rotation with reuse detection.
+- Redis-backed throttling; login lockout.
+- Dashboard: no access tokens in `localStorage`; CSP headers.
 
-- SSRF protection on all user-supplied scan URLs
-- Passive security checks only (no exploit payloads)
-- Passwords hashed (bcryptjs); refresh tokens hashed at rest
-- JWT access tokens (15m) + rotated refresh tokens
-- Global rate limiting + tighter limits on auth routes
+Details: `docs/ARCHITECTURE.md` (threat model + **Known limitations**).
 
-### Production
+## Production notes
 
-See `docker-compose.prod.yml` and `qa-lab-backend/Dockerfile`.
+- Use `docker-compose.prod.yml` with separate **api** and **worker** images.
+- Run migrations as a one-shot job (see `docs/OPERATIONS.md`).
+- Configure real email before relying on verification links (`EMAIL_MODE=log` by default).
+
+## API (selected)
+
+| Area | Endpoints |
+|------|-----------|
+| Auth | `register`, `login`, `refresh`, `logout`, `me`, `verify-email`, `forgot-password`, `reset-password` |
+| Tenancy | organizations, projects, websites |
+| Scans | `POST/GET /scans`, cancel (JWT or API key) |
+| Schedules | CRUD under `/schedules` |
+| API keys | create / list / revoke |
+| Domain | `POST /websites/:id/verify/start\|confirm` |
+| Ops | `/health/live`, `/health/ready`, `/metrics` |
+
+## Further documentation
+
+| Doc | Topic |
+|-----|--------|
+| `docs/ARCHITECTURE.md` | System design, threat model, limitations |
+| `docs/AUTH.md` | Sessions and cookies |
+| `docs/API_KEYS.md` | Key auth + CI curl example |
+| `docs/WORKER.md` | `RUN_MODE`, limits |
+| `docs/QUOTAS_AND_SCHEDULES.md` | Plans and verification |
+| `docs/TESTING.md` | Tests and IDOR catalog |
+| `docs/OPERATIONS.md` | Runbook, retention, backups |
+| `docs/CI_AND_BRANCH_PROTECTION.md` | Required checks |
 
 ---
 
 ## CLI scanner
-
-The following sections describe the standalone scanner (also used by the API worker).
 
 
 # Features

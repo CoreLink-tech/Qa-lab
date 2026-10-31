@@ -1,209 +1,110 @@
 # QA Lab Architecture
 
 > Last updated: 2026-10-31  
-> Status: Platform complete for MVP — Auth, orgs, projects, websites, scans, schedules, API keys, dashboard, deploy compose.
+> This document describes **what exists in the repository today**, not aspirational roadmap language.
 
 ## 1. Overview
 
-QA Lab is a website Quality Assurance platform consisting of:
+QA Lab is a multi-tenant website quality-assurance system:
 
-1. **CLI Scanner Engine** (root) – a modular, CommonJS Node.js tool that crawls sites, runs rule-based analysis, scores results, and produces reports.
-2. **Backend API** (`qa-lab-backend/`) – NestJS + Prisma + PostgreSQL + Redis/BullMQ platform for multi-tenant workspaces, scan orchestration, authentication, and persistence.
-3. **Future Dashboard** (`apps/web` planned) – web UI for projects, scans, trends, and reports.
-4. **Infra** – Docker Compose for local development; cloud-ready deployment model.
+| Layer | Path | Role |
+|-------|------|------|
+| CLI + scanner library | `src/` | Crawl and score sites; CommonJS |
+| API | `qa-lab-backend/` (`RUN_MODE=api`) | HTTP API, enqueue jobs |
+| Worker | `qa-lab-backend/` (`RUN_MODE=worker`) | BullMQ consumer, runs scans |
+| Dashboard | `apps/web/` | Next.js UI (port 3001) |
+| Data | PostgreSQL + Redis | Prisma models + queues / rate limits |
 
-The scanner remains usable as a standalone CLI while being made importable as a library so backend workers can invoke it safely.
+Default local mode `RUN_MODE=all` runs the scan consumer inside the API process for convenience only. Production should use **separate** API and worker processes.
 
-## 2. Root CLI Scanner Architecture
+## 2. Scanner (`src/`)
 
-### Entry point
-- `src/index.js` – CLI binary (`qalab` / `node src/index.js <url> [flags]`).
+### Pipeline
+1. CLI (`src/index.js`) or library (`src/lib/scan.js`)
+2. SSRF validation (`src/utils/ssrfGuard.js`) + safe HTTP (`src/utils/safeHttp.js`)
+3. Crawl / fetch via shared `httpClient` (routed through safe layer)
+4. Normalize pages → rule engine → findings → score → reports
 
-### Core pipeline (current)
-1. **Argument parsing** – URL + flags (`--concurrency`, `--depth`, `--max-pages`, `--delay`, `--fail-on`, `--min-score`, `--check-exposed-paths`, plugins, etc.).
-2. **Site crawling** (`siteCrawler.js`) – discovers internal pages, respects depth/max-pages, optional robots.txt, concurrency control, rate limiting.
-3. **Page fetching** (`pageFetcher.js` + `utils/httpClient.js`) – HTTP (axios) with Playwright available for JS-heavy needs.
-4. **Normalization** (`normalizer.js`) – extracts structured page model (headings, meta, links, images, forms, headers, cookies, technology signals, etc.) while discarding raw HTML to control memory.
-5. **Rule engine** (`ruleEngine.js` + `core/ruleRegistry.js` + `src/rules/*`) – modular rules by domain:
-   - SEO, Accessibility, Security, Performance, Forms, Links, Assets, Functionality, Exposed Paths (opt-in).
-   - Per-page rules + final/aggregate rules.
-   - Plugin support via rule registry.
-6. **Finding aggregation** (`findingAggregator.js`) – groups by rule id.
-7. **Scoring** (`scoring.js`) – overall score, letter grade, category breakdown.
-8. **Recommendations** (`recommendations/`).
-9. **Reports** – JSON, HTML, Markdown, CSV, terminal, dashboard generator, PR comment, webhooks.
-10. **Quality gate** (`qualityGate.js`) – exit code control for CI (`--fail-on`, `--min-score`).
-11. **History / comparison** – local scan history for trend comparison.
+### Security properties (scanner)
+- Passive checks only (no exploit payloads).
+- SSRF: DNS resolution, blocked private/special ranges (`ipaddr.js`), IP pinning, manual redirects, port allow-list.
+- Credentials in URLs rejected.
 
-### Design principles (preserved)
-- CommonJS for the CLI surface.
-- Rules are pure functions over normalized page / site models.
-- Streaming-friendly pipeline for larger sites (recent improvements).
-- Passive security checks only; opt-in exposed-path probing is still read-only.
+### Library API
+`src/lib/scan.js` exports `scan(request)` used by the worker. CLI remains supported.
 
-### Target library API (Phase 2)
-The scanner will expose a clean programmatic interface (TypeScript definitions + JS implementation) so workers can call:
-
-```ts
-scan(request: ScanRequest): Promise<ScanResult>
-```
-
-without going through process.argv or writing files unless requested.
-
-## 3. Backend Architecture (`qa-lab-backend/`)
+## 3. Backend (`qa-lab-backend/`)
 
 ### Stack
-- NestJS 11 (TypeScript)
-- Prisma 7 + PostgreSQL
-- Redis (ioredis) + BullMQ for queues
-- Helmet, throttling, class-validator / class-transformer
-- Swagger, Terminus health checks
-- JWT-based auth (access + refresh) planned / partially scaffolded
+NestJS 11, Prisma 7, PostgreSQL, Redis, BullMQ, JWT + opaque refresh tokens, Swagger, Terminus.
 
-### Current modules
-- `config/` – validated environment configuration
-- `database/` – PrismaService
-- `redis/` – RedisService
-- `health/` – DB + Redis health indicators
+### Modules present
+- **auth** — register/login/refresh/logout, email verify, password reset/change, lockout, refresh families, httpOnly refresh cookie
+- **organizations / projects / websites** — membership AuthZ
+- **scans** — queue jobs; JWT or API key (`scans:read` / `scans:write`)
+- **schedules** — interval schedules; claim with `FOR UPDATE SKIP LOCKED`
+- **api-keys** — create once / list / revoke; org-scoped principal
+- **domain-verify** — DNS TXT or well-known file
+- **quotas** — websites, pages/scan, scans/day, min schedule interval
+- **audit** — best-effort audit rows
+- **queue / worker** — BullMQ; worker isolation via `RUN_MODE`
+- **observability** — request IDs, JSON logs, `/api/metrics`, live/ready
+- **retention** — deletes old reports/audit/tokens on worker
 
-### Planned / in-progress domains
-- Auth (register, login, refresh, email verification)
-- Organizations / workspaces + memberships + roles
-- Projects & Websites
-- Scan orchestration (create → queue → worker → persist)
-- Reports storage & retrieval
-- API keys (org-scoped)
-- Audit logging
-- Scheduling / recurring scans
-- Webhooks & notifications
-- Quality-gate integration for CI
+### Auth model
+- Access JWT (~15m) in response body; dashboard keeps it **in memory**.
+- Refresh token: httpOnly cookie + body for non-browser clients; rotation + **family revoke on reuse**.
+- API keys: `Authorization: Bearer qalab_…` or `X-API-Key`.
 
-### Data model (Prisma – high level)
-- **User** – identity, password hash, status
-- **Organization** – multi-tenant workspace
-- **OrganizationMember** – role (OWNER / ADMIN / MEMBER / VIEWER)
-- **Project** – belongs to org
-- **Website** – target URL under a project
-- **Scan** – status (QUEUED → RUNNING → COMPLETED/FAILED/CANCELLED), trigger type
-- **Report** – score, grade, issueCount, reportJson (Json), optional reportHtml
-- **RefreshToken**, **ApiKey**, **AuditLog**
+## 4. Dashboard (`apps/web/`)
 
-Large report payloads live in the `Report` table. Strategy: keep frequently queried summary fields (score, grade, counts) denormalized; store full JSON for download / detailed views; consider object storage later if payloads grow.
+Next.js App Router, Tailwind. Talks to API with `credentials: "include"`.  
+CSP and security headers in `next.config.ts`.  
+Not a full design system; functional UI for auth, projects, scans, settings (API keys).
 
-## 4. Data flow – Scan request → Report
+## 5. Data model (high level)
 
-```
-User / API / CI
-    ↓
-POST /scans (or scheduled job)
-    ↓
-AuthZ (org membership + project access)
-    ↓
-Create Scan row (status=QUEUED)
-    ↓
-Enqueue BullMQ job (scan queue)
-    ↓
-Worker picks job
-    ↓
-SSRF-safe URL validation + policy checks
-    ↓
-Invoke scanner library (ScanRequest → ScanResult)
-    ↓
-Normalize / persist Report + update Scan status
-    ↓
-Optional: webhooks, PR comment, notifications
-    ↓
-Dashboard / API consumers read Scan + Report
-```
+User → OrganizationMember → Organization → Project → Website → Scan → Report  
+Also: RefreshToken, ApiKey, ScanSchedule, AuditLog, PasswordResetToken.
 
-Workers run the existing scanner engine in-process (or as a controlled child process) with resource limits, timeouts, and cancellation support.
+Quotas live on Organization. Domain verification fields on Website.
 
-## 5. Queue / Worker architecture
+## 6. Deployment
 
-- **Redis** – broker + lock store
-- **BullMQ** – scan queue(s), optional scheduled/repeatable jobs
-- Job payload: `{ scanId, websiteId, options }`
-- Worker:
-  - Loads scan + website from DB
-  - Applies org/project defaults + per-scan overrides
-  - Calls scanner library with progress callbacks (optional Redis pub/sub or DB progress updates)
-  - Writes Report, updates status, handles failures/retries
-- Concurrency and rate limits configurable per deployment
-- Dead-letter / failed job inspection via BullMQ dashboard or admin endpoints
+- Dev: `docker compose up -d` (Postgres + Redis only).
+- Prod-oriented: `docker-compose.prod.yml` with **api** and **worker** targets from `qa-lab-backend/Dockerfile`.
+- Migrations: **one-shot** `prisma migrate deploy`, not on every container start.
 
-## 6. Security boundaries
+## 7. Threat model (summary)
 
-- **Never trust user-supplied URLs** – SSRF protection (block private/link-local/metadata IPs, enforce scheme, optional allow-list domains).
-- **No user-supplied code execution**.
-- **AuthN** – JWT access + refresh tokens; password hashing (bcrypt/argon2).
-- **AuthZ** – every service method checks organization membership and role.
-- **API keys** – hashed at rest, scoped, rotatable, never logged in full.
-- **Input validation** – class-validator on all DTOs.
-- **Security scanning** – passive only; `--check-exposed-paths` remains opt-in and authorization-gated.
-- **Secrets** – never commit; use `.env` + secrets manager in production.
-- **Headers / hardening** – Helmet, rate limiting, CORS restricted.
-- **Audit log** – sensitive actions recorded.
+| Threat | Mitigation | Residual risk |
+|--------|------------|---------------|
+| SSRF to internal network | Guard + pinned IP + redirect re-validation | DNS rebinding races reduced not eliminated; Playwright paths must stay gated |
+| Cross-tenant IDOR | Membership checks; API keys org-scoped | Not every route has full HTTP e2e IDOR coverage |
+| Credential theft (XSS) | Refresh httpOnly; access in memory | Access JWT still usable until expiry if XSS runs |
+| Queue abuse | Quotas, org concurrency, throttling | Open registration still allows account spam |
+| Worker overload | Timeouts, reaper, attempts/backoff | Scanner AbortSignal not fully wired end-to-end |
+| Secret leakage in logs | Redaction helper | Misconfiguration can still log bodies |
 
-## 7. Deployment model
+## 8. Known limitations
 
-### Local
-- `docker-compose.yml` (Postgres + Redis) at backend or root.
-- API: `npm run start:dev`
-- CLI: `node src/index.js …` or `npx qalab …`
-- Future web: `npm run dev` in apps/web
+1. Email delivery is **log-only** unless an SMTP adapter is configured (`EMAIL_MODE`).
+2. TOTP 2FA is **not** implemented.
+3. CSRF double-submit for pure cookie SPA mutations is **not** fully implemented (Bearer access + SameSite refresh).
+4. Coverage gates are **baseline** (~35%), not 80%.
+5. No Playwright e2e in CI yet.
+6. Scanner timeout does not always hard-kill in-flight HTTP.
+7. CSP allows `'unsafe-inline'` / `'unsafe-eval'` for Next.js compatibility.
+8. Plan tiers are enforced in code defaults; **no billing** integration.
+9. Metrics are **per process**; scrape each replica.
+10. Docs under `docs/` (AUTH, WORKER, API_KEYS, etc.) are authoritative for those subsystems.
 
-### Production (target)
-- Docker images for API + worker(s)
-- Managed Postgres + Redis
-- Object storage for large HTML reports (optional evolution)
-- Horizontal workers behind the same queue
-- Observability: structured logs, health endpoints, metrics
-- CI: GitHub Actions (lint, typecheck, unit, e2e, image build)
+## 9. Related docs
 
-### Compose files
-- `docker-compose.yml` – local development (DB + Redis)
-- `docker-compose.prod.yml` (or cloud-specific) – full stack with API/worker
-
-## 8. Repository layout (target after Phase 1)
-
-```
-/
-├── src/                    # CLI scanner (kept at root for compatibility)
-├── test/                   # CLI tests
-├── qa-lab-backend/         # NestJS API (will become apps/api later if needed)
-├── docs/                   # ARCHITECTURE.md, guides, ADRs
-├── infra/                  # Docker, Terraform/Pulumi stubs, deploy scripts
-├── .github/
-│   ├── workflows/
-│   ├── ISSUE_TEMPLATE/
-│   └── PULL_REQUEST_TEMPLATE/
-├── package.json            # root scripts + workspaces (progressive)
-├── docker-compose.yml
-├── .env.example
-├── CONTRIBUTING.md
-└── CODEOWNERS
-```
-
-Progressive monorepo: keep CLI at root to avoid breaking existing users/docs; extract `packages/scanner` only when the library surface is stable and the churn is justified.
-
-## 9. Command conventions (standardized)
-
-| Scope   | Command                      | Purpose                          |
-|---------|------------------------------|----------------------------------|
-| Root    | `npm test`                   | CLI test suite                   |
-| Root    | `npm run lint` (to add)      | Lint scanner                     |
-| Backend | `npm run start:dev`          | API + watch                      |
-| Backend | `npm test` / `npm run test:e2e` | Unit / e2e                     |
-| Backend | `npx prisma migrate dev`     | Migrations                       |
-| Backend | `npx prisma studio`          | DB UI                            |
-| Infra   | `docker compose up -d`       | Postgres + Redis                 |
-
-## 10. Next phases (summary)
-
-- **Phase 1** (done): stabilize repo, docs, CI, Docker, env examples.
-- **Phase 2** (mostly done): scanner library API (`src/lib`), SSRF guard, BullMQ worker invoking library.
-- **Phase 3** (in progress): Auth, Organizations, Projects, Websites, Scans API done. Remaining: Prisma migrations applied in all envs, dashboard (`apps/web`), scheduling, public API keys UI, monitoring.
-
----
-
-This architecture prioritizes security, reuse of the proven CLI engine, clear separation of concerns, and incremental delivery toward a production multi-tenant QA platform.
+- `docs/AUTH.md`
+- `docs/API_KEYS.md`
+- `docs/WORKER.md`
+- `docs/QUOTAS_AND_SCHEDULES.md`
+- `docs/TESTING.md`
+- `docs/OPERATIONS.md`
+- `docs/CI_AND_BRANCH_PROTECTION.md`
