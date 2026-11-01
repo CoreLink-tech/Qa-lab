@@ -58,13 +58,9 @@ export class OrganizationsController {
     return this.organizationsService.getOne(user.id, organizationId);
   }
 
-
   @Post('invite')
   @ApiOperation({ summary: 'Add an existing user to the organization' })
-  invite(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body() dto: InviteMemberDto,
-  ) {
+  invite(@CurrentUser() user: AuthenticatedUser, @Body() dto: InviteMemberDto) {
     return this.organizationsService.inviteMember(
       user.id,
       dto.organizationId,

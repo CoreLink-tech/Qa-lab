@@ -13,7 +13,9 @@ const DEFAULT_TIMEOUT_MS = 1000;
 // PrismaHealthIndicator uses internally.
 @Injectable()
 export class RedisHealthIndicator {
-  constructor(private readonly healthIndicatorService: HealthIndicatorService) {}
+  constructor(
+    private readonly healthIndicatorService: HealthIndicatorService,
+  ) {}
 
   async pingCheck<Key extends string>(
     key: Key,
@@ -30,7 +32,10 @@ export class RedisHealthIndicator {
     }
   }
 
-  private pingWithTimeout(redis: RedisService, timeoutMs: number): Promise<unknown> {
+  private pingWithTimeout(
+    redis: RedisService,
+    timeoutMs: number,
+  ): Promise<unknown> {
     return Promise.race([
       redis.ping(),
       new Promise((_resolve, reject) =>

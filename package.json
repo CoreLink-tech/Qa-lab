@@ -8,8 +8,8 @@
   },
   "scripts": {
     "start": "node src/index.js",
-    "test": "QA_LAB_ALLOW_PRIVATE_NETWORK=1 node --test $(find test -name '*.test.js' | sort)",
-    "test:scanner": "QA_LAB_ALLOW_PRIVATE_NETWORK=1 node --test $(find test -name '*.test.js' | sort)",
+    "test": "node --test $(find test -name '*.test.js' | sort)",
+    "test:scanner": "node --test $(find test -name '*.test.js' | sort)",
     "lint": "echo \"No root linter configured yet \u2013 scanner is CommonJS; backend has its own eslint\"",
     "build": "echo \"Scanner is pure JS \u2013 no build step required\"",
     "dev": "node src/index.js",

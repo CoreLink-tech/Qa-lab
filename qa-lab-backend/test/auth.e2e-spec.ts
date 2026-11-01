@@ -80,9 +80,7 @@ describe('Auth (e2e)', () => {
 
     const token = login.body.tokens.accessToken as string;
 
-    await request(app.getHttpServer())
-      .get('/api/auth/me')
-      .expect(401);
+    await request(app.getHttpServer()).get('/api/auth/me').expect(401);
 
     const me = await request(app.getHttpServer())
       .get('/api/auth/me')

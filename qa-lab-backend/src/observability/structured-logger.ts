@@ -50,15 +50,14 @@ export class StructuredLogger implements LoggerService {
       ts: new Date().toISOString(),
       level,
       context: this.context,
-      message:
-        typeof message === 'string' ? message : redact(message),
+      message: typeof message === 'string' ? message : redact(message),
     };
     if (optionalParams.length) {
       payload.meta = redact(
         optionalParams.length === 1 ? optionalParams[0] : optionalParams,
       );
     }
-    // eslint-disable-next-line no-console
+
     console.log(JSON.stringify(payload));
   }
 

@@ -25,7 +25,7 @@ export class HttpLoggingInterceptor implements NestInterceptor {
           const ms = Date.now() - start;
           metrics.httpRequests.inc(req.method, res.statusCode || 200);
           metrics.httpDuration.observe(ms);
-          // eslint-disable-next-line no-console
+
           console.log(
             JSON.stringify({
               ts: new Date().toISOString(),
@@ -42,7 +42,7 @@ export class HttpLoggingInterceptor implements NestInterceptor {
         error: (err: Error) => {
           const ms = Date.now() - start;
           metrics.httpRequests.inc(req.method, 500);
-          // eslint-disable-next-line no-console
+
           console.log(
             JSON.stringify({
               ts: new Date().toISOString(),

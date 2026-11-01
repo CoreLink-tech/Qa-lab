@@ -1,12 +1,14 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Job, Worker } from 'bullmq';
 import { PrismaService } from '../database/prisma.service';
 import { Prisma, ScanStatus } from '../generated/prisma/client';
-import {
-  SCAN_QUEUE_NAME,
-  type ScanJobPayload,
-} from '../queue/queue.constants';
+import { SCAN_QUEUE_NAME, type ScanJobPayload } from '../queue/queue.constants';
 import { getScannerLibrary } from './scanner-bridge';
 import { OrgConcurrencyLimiter } from './org-concurrency.limiter';
 import { metrics } from '../observability/metrics';
@@ -38,9 +40,7 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit(): void {
     if (this.runMode === 'api') {
-      this.logger.log(
-        'RUN_MODE=api — scan worker not started in this process',
-      );
+      this.logger.log('RUN_MODE=api — scan worker not started in this process');
       return;
     }
 
@@ -48,7 +48,7 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
       host: this.config.get<string>('redis.host') || 'localhost',
       port: this.config.get<number>('redis.port') || 6379,
       password: this.config.get<string>('redis.password') || undefined,
-      maxRetriesPerRequest: null as null,
+      maxRetriesPerRequest: null,
     };
 
     this.worker = new Worker<ScanJobPayload>(
@@ -93,7 +93,9 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
 
   private async process(job: Job<ScanJobPayload>): Promise<void> {
     const { scanId } = job.data;
-    this.logger.log(`Processing scan ${scanId} (attempt ${job.attemptsMade + 1})`);
+    this.logger.log(
+      `Processing scan ${scanId} (attempt ${job.attemptsMade + 1})`,
+    );
 
     const scan = await this.prisma.scan.findUnique({
       where: { id: scanId },
@@ -155,10 +157,7 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
           checkAssets: (options.checkAssets as boolean) ?? false,
           writeReports: false,
           signal: controller.signal,
-          onProgress: (event: {
-            type?: string;
-            pagesScanned?: number;
-          }) => {
+          onProgress: (event: { type?: string; pagesScanned?: number }) => {
             if (event.type === 'page' && event.pagesScanned != null) {
               void this.prisma.scan
                 .update({

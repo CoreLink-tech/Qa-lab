@@ -44,10 +44,7 @@ export class ScansController {
     description:
       'JWT user or API key with scans:write. API keys are limited to websites in their organization.',
   })
-  create(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body() dto: CreateScanDto,
-  ) {
+  create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateScanDto) {
     return this.scansService.createForPrincipal(user, dto);
   }
 

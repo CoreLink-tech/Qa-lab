@@ -57,8 +57,7 @@ export function getScannerLibrary(): ScannerLib {
   if (cached) return cached;
 
   const root =
-    process.env.QA_LAB_SCANNER_ROOT ||
-    join(process.cwd(), '..', 'src', 'lib');
+    process.env.QA_LAB_SCANNER_ROOT || join(process.cwd(), '..', 'src', 'lib');
 
   // CommonJS require — scanner stays CJS by design
   // eslint-disable-next-line @typescript-eslint/no-require-imports

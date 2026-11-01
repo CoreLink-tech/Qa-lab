@@ -34,10 +34,7 @@ export class ApiKeysController {
   @ApiOperation({
     summary: 'Create an API key (raw value returned once)',
   })
-  create(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body() dto: CreateApiKeyDto,
-  ) {
+  create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateApiKeyDto) {
     return this.apiKeysService.create(user.id, dto);
   }
 

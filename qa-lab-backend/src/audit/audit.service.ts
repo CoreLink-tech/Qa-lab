@@ -22,7 +22,8 @@ export class AuditService {
           action: input.action,
           resource: input.resource,
           resourceId: input.resourceId ?? null,
-          metadata: (input.metadata as Prisma.InputJsonValue | undefined) ?? undefined,
+          metadata:
+            (input.metadata as Prisma.InputJsonValue | undefined) ?? undefined,
         },
       });
     } catch {

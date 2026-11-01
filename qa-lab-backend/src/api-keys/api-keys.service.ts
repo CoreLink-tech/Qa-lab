@@ -13,7 +13,10 @@ import { CreateApiKeyDto } from './dto/create-api-key.dto';
 /** Digest for high-entropy API tokens (not user passwords). */
 function hashApiKeyMaterial(rawKey: string): string {
   // HMAC-SHA256 over random API tokens — not a password-hashing scheme.
-  const pepper = process.env.API_KEY_PEPPER || process.env.JWT_ACCESS_SECRET || 'qalab-api-key-v1';
+  const pepper =
+    process.env.API_KEY_PEPPER ||
+    process.env.JWT_ACCESS_SECRET ||
+    'qalab-api-key-v1';
   return createHmac('sha256', pepper).update(rawKey, 'utf8').digest('hex');
 }
 
@@ -26,11 +29,10 @@ export class ApiKeysService {
   ) {}
 
   async create(userId: string, dto: CreateApiKeyDto) {
-    await this.organizations.requireMembership(
-      userId,
-      dto.organizationId,
-      [OrganizationRole.OWNER, OrganizationRole.ADMIN],
-    );
+    await this.organizations.requireMembership(userId, dto.organizationId, [
+      OrganizationRole.OWNER,
+      OrganizationRole.ADMIN,
+    ]);
 
     const rawKey = `qalab_${randomBytes(24).toString('base64url')}`;
     const prefix = rawKey.slice(0, 12);
@@ -92,11 +94,10 @@ export class ApiKeysService {
     const key = await this.prisma.apiKey.findUnique({ where: { id: keyId } });
     if (!key) throw new NotFoundException('API key not found');
 
-    await this.organizations.requireMembership(
-      userId,
-      key.organizationId,
-      [OrganizationRole.OWNER, OrganizationRole.ADMIN],
-    );
+    await this.organizations.requireMembership(userId, key.organizationId, [
+      OrganizationRole.OWNER,
+      OrganizationRole.ADMIN,
+    ]);
 
     if (key.revokedAt) {
       throw new ForbiddenException('API key already revoked');
@@ -148,8 +149,7 @@ export class ApiKeysService {
     if (key.expiresAt && key.expiresAt.getTime() < Date.now()) return null;
 
     const shouldTouch =
-      !key.lastUsedAt ||
-      Date.now() - key.lastUsedAt.getTime() > 60_000;
+      !key.lastUsedAt || Date.now() - key.lastUsedAt.getTime() > 60_000;
     if (shouldTouch) {
       await this.prisma.apiKey
         .update({
@@ -162,4 +162,3 @@ export class ApiKeysService {
     return key;
   }
 }
-

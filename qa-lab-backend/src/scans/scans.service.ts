@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '../database/prisma.service';
 import { ScanStatus, ScanTrigger } from '../generated/prisma/client';
 import { OrganizationsService } from '../organizations/organizations.service';
-import { SCAN_QUEUE_NAME, type ScanJobPayload } from '../queue/queue.constants';
+import { type ScanJobPayload } from '../queue/queue.constants';
 import { ScanQueueService } from '../queue/scan-queue.service';
 import { WebsitesService } from '../websites/websites.service';
 import { QuotasService } from '../quotas/quotas.service';
@@ -26,7 +26,6 @@ export class ScansService {
     private readonly quotas: QuotasService,
     private readonly domainVerify: DomainVerifyService,
   ) {}
-
 
   /**
    * Create scan for either a user session or an API key principal.
@@ -178,9 +177,13 @@ export class ScansService {
     };
   }
 
-
   async listByWebsiteForPrincipal(
-    principal: { kind?: string; id: string; userId?: string | null; organizationId?: string },
+    principal: {
+      kind?: string;
+      id: string;
+      userId?: string | null;
+      organizationId?: string;
+    },
     websiteId: string,
   ) {
     if (principal.kind === 'api_key' && principal.organizationId) {
@@ -194,7 +197,12 @@ export class ScansService {
   }
 
   async getByIdForPrincipal(
-    principal: { kind?: string; id: string; userId?: string | null; organizationId?: string },
+    principal: {
+      kind?: string;
+      id: string;
+      userId?: string | null;
+      organizationId?: string;
+    },
     scanId: string,
   ) {
     if (principal.kind === 'api_key' && principal.organizationId) {
@@ -209,7 +217,10 @@ export class ScansService {
       if (scan.website.project.organizationId !== principal.organizationId) {
         throw new NotFoundException('Scan not found');
       }
-      return this.getOne(scan.website.projectId ? (principal.userId || 'api') : 'api', scanId).catch(async () => {
+      return this.getOne(
+        scan.website.projectId ? principal.userId || 'api' : 'api',
+        scanId,
+      ).catch(async () => {
         // Fallback shape without user membership
         return {
           id: scan.id,
@@ -292,10 +303,7 @@ export class ScansService {
     if (!project) {
       throw new NotFoundException('Project not found');
     }
-    await this.organizations.requireMembership(
-      userId,
-      project.organizationId,
-    );
+    await this.organizations.requireMembership(userId, project.organizationId);
 
     const scans = await this.prisma.scan.findMany({
       where: { projectId },

@@ -28,7 +28,9 @@ describe('validateEnvironment', () => {
 
   it('throws when DATABASE_URL is missing', () => {
     const { DATABASE_URL, ...rest } = validConfig();
-    expect(() => validateEnvironment(rest)).toThrow(/Environment validation failed/);
+    expect(() => validateEnvironment(rest)).toThrow(
+      /Environment validation failed/,
+    );
   });
 
   it('throws when JWT_ACCESS_SECRET is missing', () => {
@@ -42,7 +44,9 @@ describe('validateEnvironment', () => {
   });
 
   it('throws on an invalid NODE_ENV value', () => {
-    expect(() => validateEnvironment(validConfig({ NODE_ENV: 'staging' }))).toThrow();
+    expect(() =>
+      validateEnvironment(validConfig({ NODE_ENV: 'staging' })),
+    ).toThrow();
   });
 
   it('throws on a PORT outside the valid 1-65535 range', () => {
@@ -51,7 +55,9 @@ describe('validateEnvironment', () => {
   });
 
   it('throws on a REDIS_PORT outside the valid range', () => {
-    expect(() => validateEnvironment(validConfig({ REDIS_PORT: '-1' }))).toThrow();
+    expect(() =>
+      validateEnvironment(validConfig({ REDIS_PORT: '-1' })),
+    ).toThrow();
   });
 
   it('allows REDIS_PASSWORD and CORS_ORIGIN to be omitted (optional)', () => {

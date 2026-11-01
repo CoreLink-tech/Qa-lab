@@ -8,14 +8,6 @@ export type EmailMessage = {
   html?: string;
 };
 
-type SmtpConfig = {
-  host: string;
-  port: number;
-  secure: boolean;
-  user?: string;
-  pass?: string;
-  from: string;
-};
 
 /**
  * Email delivery.

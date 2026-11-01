@@ -2,11 +2,13 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  BadRequestException,
-  HttpException,
 } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { OrganizationRole, ScanStatus, ScanTrigger } from '../generated/prisma/client';
+import {
+  OrganizationRole,
+  ScanStatus,
+  ScanTrigger,
+} from '../generated/prisma/client';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { WebsitesService } from '../websites/websites.service';
 import { ScanQueueService } from '../queue/scan-queue.service';
@@ -106,9 +108,7 @@ export class SchedulesService {
       data: {
         enabled,
         nextRunAt: enabled
-          ? new Date(
-              Date.now() + schedule.intervalHours * 60 * 60 * 1000,
-            )
+          ? new Date(Date.now() + schedule.intervalHours * 60 * 60 * 1000)
           : null,
       },
     });

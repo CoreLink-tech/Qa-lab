@@ -19,7 +19,8 @@ export default () => ({
   },
 
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:3001',
-  trustProxy: process.env.TRUST_PROXY === 'true' || process.env.TRUST_PROXY === '1',
+  trustProxy:
+    process.env.TRUST_PROXY === 'true' || process.env.TRUST_PROXY === '1',
   cookie: {
     secure: process.env.COOKIE_SECURE === 'true',
   },

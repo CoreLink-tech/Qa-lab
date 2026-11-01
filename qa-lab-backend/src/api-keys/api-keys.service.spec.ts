@@ -4,7 +4,8 @@ import { ApiKeysService } from './api-keys.service';
 describe('ApiKeysService.validateRawKey', () => {
   const prevSecret = process.env.JWT_ACCESS_SECRET;
   beforeAll(() => {
-    process.env.JWT_ACCESS_SECRET = 'test-access-secret-at-least-32-characters-long';
+    process.env.JWT_ACCESS_SECRET =
+      'test-access-secret-at-least-32-characters-long';
   });
   afterAll(() => {
     process.env.JWT_ACCESS_SECRET = prevSecret;
@@ -36,12 +37,19 @@ describe('ApiKeysService.validateRawKey', () => {
 
   it('rejects unknown keys', async () => {
     prisma.apiKey.findUnique.mockResolvedValue(null);
-    await expect(service.validateRawKey('qalab_unknownkeyvalue')).resolves.toBeNull();
+    await expect(
+      service.validateRawKey('qalab_unknownkeyvalue'),
+    ).resolves.toBeNull();
   });
 
   it('rejects revoked keys', async () => {
     const raw = 'qalab_testkeyvalue123456789012';
-    const keyHash = createHmac('sha256', process.env.JWT_ACCESS_SECRET || 'qalab-api-key-v1').update(raw, 'utf8').digest('hex');
+    const keyHash = createHmac(
+      'sha256',
+      process.env.JWT_ACCESS_SECRET || 'qalab-api-key-v1',
+    )
+      .update(raw, 'utf8')
+      .digest('hex');
     prisma.apiKey.findUnique.mockResolvedValue({
       id: 'k1',
       keyHash,
@@ -57,7 +65,12 @@ describe('ApiKeysService.validateRawKey', () => {
 
   it('accepts valid key and touches lastUsedAt', async () => {
     const raw = 'qalab_testkeyvalue123456789012';
-    const keyHash = createHmac('sha256', process.env.JWT_ACCESS_SECRET || 'qalab-api-key-v1').update(raw, 'utf8').digest('hex');
+    const keyHash = createHmac(
+      'sha256',
+      process.env.JWT_ACCESS_SECRET || 'qalab-api-key-v1',
+    )
+      .update(raw, 'utf8')
+      .digest('hex');
     prisma.apiKey.findUnique.mockResolvedValue({
       id: 'k1',
       keyHash,

@@ -10,10 +10,7 @@ import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../database/prisma.service';
 import { EmailService } from '../email/email.service';
-import {
-  OrganizationRole,
-  UserStatus,
-} from '../generated/prisma/client';
+import { OrganizationRole, UserStatus } from '../generated/prisma/client';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import type { AuthResponseDto } from './dto/auth-response.dto';
@@ -50,8 +47,7 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
     const orgName =
-      dto.organizationName?.trim() ||
-      this.defaultOrgName(dto.firstName, email);
+      dto.organizationName?.trim() || this.defaultOrgName(dto.firstName, email);
     const orgSlug = await this.uniqueSlug(this.slugify(orgName));
     const verifyRaw = randomBytes(32).toString('base64url');
     const verifyHash = this.hashToken(verifyRaw);
@@ -85,7 +81,8 @@ export class AuthService {
       return { user, organization };
     });
 
-    const appUrl = this.config.get<string>('app.publicUrl') || 'http://localhost:3001';
+    const appUrl =
+      this.config.get<string>('app.publicUrl') || 'http://localhost:3001';
     await this.email.send({
       to: email,
       subject: 'Verify your QA Lab email',
@@ -143,9 +140,7 @@ export class AuthService {
     if (!passwordOk) {
       const failed = user.failedLoginCount + 1;
       const lockedUntil =
-        failed >= MAX_FAILED_LOGINS
-          ? new Date(Date.now() + LOCKOUT_MS)
-          : null;
+        failed >= MAX_FAILED_LOGINS ? new Date(Date.now() + LOCKOUT_MS) : null;
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
@@ -353,7 +348,8 @@ export class AuthService {
       },
     });
 
-    const appUrl = this.config.get<string>('app.publicUrl') || 'http://localhost:3001';
+    const appUrl =
+      this.config.get<string>('app.publicUrl') || 'http://localhost:3001';
     await this.email.send({
       to: email,
       subject: 'Reset your QA Lab password',

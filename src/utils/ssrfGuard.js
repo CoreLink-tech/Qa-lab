@@ -155,9 +155,11 @@ function isPrivateOrReservedIPv6(ip) {
 async function assertSafeScanUrl(urlString, options = {}) {
   const allowHttp = options.allowHttp !== false;
   const resolveDns = options.resolveDns !== false;
+  // Never honour private-network bypass in production (hostile multi-tenant SaaS).
   const allowPrivateNetwork =
-    options.allowPrivateNetwork === true ||
-    process.env.QA_LAB_ALLOW_PRIVATE_NETWORK === "1";
+    process.env.NODE_ENV !== "production" &&
+    (options.allowPrivateNetwork === true ||
+      process.env.QA_LAB_ALLOW_PRIVATE_NETWORK === "1");
   const allowedPorts = options.allowedPorts
     ? new Set(options.allowedPorts)
     : DEFAULT_ALLOWED_PORTS;

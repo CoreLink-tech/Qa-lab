@@ -53,7 +53,7 @@ export class AuthController {
     return {
       httpOnly: true,
       secure,
-      sameSite: (secure ? 'none' : 'lax') as 'none' | 'lax',
+      sameSite: secure ? 'none' : 'lax',
       path: '/api/auth',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     };
