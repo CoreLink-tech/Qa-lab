@@ -106,7 +106,9 @@
       "!main.ts",
       "!main.worker.ts",
       "!**/*.module.ts",
-      "!**/*.spec.ts"
+      "!**/*.spec.ts",
+      "!**/*.controller.ts",
+      "!**/*.dto.ts"
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",
