@@ -16,7 +16,7 @@ export type EmailMessage = {
 @Injectable()
 export class EmailService implements OnModuleInit {
   private readonly logger = new Logger(EmailService.name);
-  private transporter: import('nodemailer').Transporter | null = null; // eslint-disable-line @typescript-eslint/no-redundant-type-constituents
+  private transporter: import('nodemailer').Transporter | null = null;
   private mode: string = 'log';
   private fromAddress = 'noreply@localhost';
 
@@ -53,10 +53,9 @@ export class EmailService implements OnModuleInit {
     }
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- nodemailer CJS; dynamic import would force async init
       const nodemailer = require('nodemailer') as typeof import('nodemailer');
-      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+
       this.transporter = nodemailer.createTransport({
         host,
         port,

@@ -8,9 +8,9 @@ describe('WebsitesService', () => {
       findUnique: jest.Mock;
     };
   };
-  let projects: Record<string, jest.Mock>;
+  let projects: { requireProjectAccess: jest.Mock };
   let organizations: { requireMembership: jest.Mock };
-  let quotas: Record<string, jest.Mock>;
+  let quotas: { assertCanAddWebsite: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -81,6 +81,19 @@ describe('WebsitesService', () => {
         'user-1',
         'org-a',
       );
+    });
+  });
+
+  describe('create', () => {
+    it('throws when project access fails', async () => {
+      projects.requireProjectAccess.mockRejectedValue(new NotFoundException());
+      await expect(
+        service.create('user-1', {
+          projectId: 'p1',
+          url: 'https://example.com',
+          name: 't',
+        } as never),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });

@@ -29,6 +29,8 @@ jobs:
         run: npm test
         timeout-minutes: 5
       - name: Audit (high+)
+        # web: postcss via next@15 is a known exception (docs/AUDIT_EXCEPTIONS.md, expires 2026-12-15)
+        # Root and backend must stay at high.
         run: npm audit --omit=dev --audit-level=high
 
   backend:

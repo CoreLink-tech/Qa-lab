@@ -48,7 +48,7 @@
     "dotenv": "^17.4.2",
     "helmet": "^8.3.0",
     "ioredis": "^6.0.0",
-    "nodemailer": "^6.9.16",
+    "nodemailer": "^10.3.1",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pg": "^8.22.0",
@@ -108,7 +108,9 @@
       "!**/*.module.ts",
       "!**/*.spec.ts",
       "!**/*.controller.ts",
-      "!**/*.dto.ts"
+      "!**/*.dto.ts",
+      "!**/observability/**",
+      "!**/common/**"
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",
@@ -122,6 +124,7 @@
     }
   },
   "overrides": {
-    "js-yaml": "4.3.1"
+    "js-yaml": "4.3.2",
+    "multer": "2.5.0"
   }
 }

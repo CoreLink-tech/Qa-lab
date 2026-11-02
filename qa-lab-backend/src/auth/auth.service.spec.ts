@@ -92,29 +92,27 @@ describe('AuthService', () => {
   describe('register', () => {
     it('creates a user, organization, and returns tokens', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
-      prisma.$transaction.mockImplementation(
-        (fn: (tx: unknown) => unknown) => {
-          const tx = {
-            user: {
-              create: jest.fn().mockResolvedValue({
-                id: 'user-1',
-                email: 'alex@example.com',
-                firstName: 'Alex',
-                lastName: null,
-                status: UserStatus.ACTIVE,
-              }),
-            },
-            organization: {
-              create: jest.fn().mockResolvedValue({
-                id: 'org-1',
-                name: 'Acme',
-                slug: 'acme',
-              }),
-            },
-          };
-          return fn(tx);
-        },
-      );
+      prisma.$transaction.mockImplementation((fn: (tx: unknown) => unknown) => {
+        const tx = {
+          user: {
+            create: jest.fn().mockResolvedValue({
+              id: 'user-1',
+              email: 'alex@example.com',
+              firstName: 'Alex',
+              lastName: null,
+              status: UserStatus.ACTIVE,
+            }),
+          },
+          organization: {
+            create: jest.fn().mockResolvedValue({
+              id: 'org-1',
+              name: 'Acme',
+              slug: 'acme',
+            }),
+          },
+        };
+        return fn(tx);
+      });
 
       const result = await service.register({
         email: 'Alex@Example.com',
