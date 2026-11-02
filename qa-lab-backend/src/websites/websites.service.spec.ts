@@ -92,7 +92,7 @@ describe('WebsitesService', () => {
           projectId: 'p1',
           url: 'https://example.com',
           name: 't',
-        } as never),
+        }),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
   });

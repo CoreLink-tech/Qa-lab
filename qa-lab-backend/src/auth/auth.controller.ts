@@ -50,10 +50,11 @@ export class AuthController {
     const secure =
       this.config.get<string>('cookie.secure') === 'true' ||
       this.config.get<string>('nodeEnv') === 'production';
+    const sameSite: 'none' | 'lax' = secure ? 'none' : 'lax';
     return {
       httpOnly: true,
       secure,
-      sameSite: (secure ? 'none' : 'lax') as 'none' | 'lax',
+      sameSite,
       path: '/api/auth',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     };
