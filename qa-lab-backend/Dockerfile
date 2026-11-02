@@ -25,6 +25,8 @@ COPY --from=build /app/backend/dist /app/backend/dist
 COPY --from=build /app/backend/package.json /app/backend/
 COPY --from=build /app/backend/prisma /app/backend/prisma
 COPY --from=build /app/backend/src/generated /app/backend/src/generated
+# Nest compiles imports of ../generated to dist/generated relative to dist modules
+COPY --from=build /app/backend/src/generated /app/backend/dist/generated
 ENV NODE_ENV=production
 ENV QA_LAB_SCANNER_ROOT=/app/scanner/lib
 WORKDIR /app/backend
