@@ -160,14 +160,19 @@ jobs:
         run: docker build -f qa-lab-backend/Dockerfile --target api -t qa-lab-api:ci .
       - name: Build Worker image
         run: docker build -f qa-lab-backend/Dockerfile --target worker -t qa-lab-worker:ci .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: qa-lab-backend/package-lock.json
       - name: Run migrations against service Postgres
         working-directory: qa-lab-backend
         env:
           DATABASE_URL: postgresql://qa_lab:qa_lab_password@127.0.0.1:5432/qa_lab?schema=public
         run: |
           npm ci --ignore-scripts
-          npx prisma generate
-          npx prisma migrate deploy
+          ./node_modules/.bin/prisma generate
+          ./node_modules/.bin/prisma migrate deploy
       - name: Start API container and assert /health/live
         run: |
           # Service containers publish to the job host; use host network so the
