@@ -162,17 +162,17 @@ jobs:
         run: docker build -f qa-lab-backend/Dockerfile --target worker -t qa-lab-worker:ci .
       - name: Start API container and assert /health/live
         run: |
-          docker network create qa-lab-ci || true
-          docker run -d --name qa-lab-api --network qa-lab-ci \
-            -e DATABASE_URL="postgresql://qa_lab:qa_lab_password@postgres:5432/qa_lab?schema=public" \
-            -e REDIS_HOST=redis -e REDIS_PORT=6379 \
+          # Service containers publish to the job host; use host network so the
+          # app container can reach localhost:5432 / localhost:6379.
+          docker run -d --name qa-lab-api --network host \
+            -e DATABASE_URL="postgresql://qa_lab:qa_lab_password@127.0.0.1:5432/qa_lab?schema=public" \
+            -e REDIS_HOST=127.0.0.1 -e REDIS_PORT=6379 \
             -e JWT_ACCESS_SECRET="$JWT_ACCESS_SECRET" \
             -e JWT_REFRESH_SECRET="$JWT_REFRESH_SECRET" \
             -e NODE_ENV=production -e RUN_MODE=api \
-            -p 3000:3000 qa-lab-api:ci
-          # wait for live
+            qa-lab-api:ci
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:3000/api/health/live; then
+            if curl -sf http://127.0.0.1:3000/api/health/live; then
               echo "API live OK"
               exit 0
             fi
@@ -183,9 +183,9 @@ jobs:
           exit 1
       - name: Start Worker container and assert process stays alive 20s
         run: |
-          docker run -d --name qa-lab-worker --network qa-lab-ci \
-            -e DATABASE_URL="postgresql://qa_lab:qa_lab_password@postgres:5432/qa_lab?schema=public" \
-            -e REDIS_HOST=redis -e REDIS_PORT=6379 \
+          docker run -d --name qa-lab-worker --network host \
+            -e DATABASE_URL="postgresql://qa_lab:qa_lab_password@127.0.0.1:5432/qa_lab?schema=public" \
+            -e REDIS_HOST=127.0.0.1 -e REDIS_PORT=6379 \
             -e JWT_ACCESS_SECRET="$JWT_ACCESS_SECRET" \
             -e JWT_REFRESH_SECRET="$JWT_REFRESH_SECRET" \
             -e NODE_ENV=production -e RUN_MODE=worker \
