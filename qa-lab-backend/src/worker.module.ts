@@ -11,6 +11,7 @@ import { ScanReaperService } from './scans/scan-reaper.service';
 import { SchedulesModule } from './schedules/schedules.module';
 import { RetentionModule } from './retention/retention.module';
 import { QuotasModule } from './quotas/quotas.module';
+import { AuditModule } from './audit/audit.module';
 
 /**
  * Minimal module for the dedicated worker process.
@@ -29,6 +30,7 @@ import { QuotasModule } from './quotas/quotas.module';
     SchedulesModule,
     RetentionModule,
     QuotasModule,
+    AuditModule,
   ],
   providers: [OrgConcurrencyLimiter, ScanProcessor, ScanReaperService],
 })
