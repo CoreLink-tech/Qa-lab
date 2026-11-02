@@ -93,7 +93,7 @@ describe('AuthService', () => {
     it('creates a user, organization, and returns tokens', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
       prisma.$transaction.mockImplementation(
-        async (fn: (tx: unknown) => unknown) => {
+        (fn: (tx: unknown) => unknown) => {
           const tx = {
             user: {
               create: jest.fn().mockResolvedValue({

@@ -220,7 +220,7 @@ export class ScansService {
       return this.getOne(
         scan.website.projectId ? principal.userId || 'api' : 'api',
         scanId,
-      ).catch(async () => {
+      ).catch(() => {
         // Fallback shape without user membership
         return {
           id: scan.id,

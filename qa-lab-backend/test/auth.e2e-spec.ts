@@ -4,6 +4,12 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 
+type AuthBody = {
+  user?: { email?: string };
+  tokens?: { accessToken?: string; refreshToken?: string };
+  email?: string;
+};
+
 describe('Auth (e2e)', () => {
   let app: INestApplication<App>;
   const email = `e2e_${Date.now()}@example.com`;
@@ -43,10 +49,12 @@ describe('Auth (e2e)', () => {
       })
       .expect(201);
 
-    expect(res.body.user?.email).toBe(email);
-    expect(typeof res.body.tokens?.accessToken).toBe('string');
-    expect(res.body.tokens.accessToken.length).toBeGreaterThan(20);
-    expect(typeof res.body.tokens?.refreshToken).toBe('string');
+    expect((res.body as AuthBody).user?.email).toBe(email);
+    expect(typeof (res.body as AuthBody).tokens?.accessToken).toBe('string');
+    expect((res.body as AuthBody).tokens!.accessToken!.length).toBeGreaterThan(
+      20,
+    );
+    expect(typeof (res.body as AuthBody).tokens?.refreshToken).toBe('string');
   });
 
   it('POST /api/auth/register rejects duplicate email', async () => {
@@ -62,7 +70,7 @@ describe('Auth (e2e)', () => {
       .send({ email, password })
       .expect(200);
 
-    expect(typeof res.body.tokens?.accessToken).toBe('string');
+    expect(typeof (res.body as AuthBody).tokens?.accessToken).toBe('string');
   });
 
   it('POST /api/auth/login rejects bad password', async () => {
@@ -78,7 +86,7 @@ describe('Auth (e2e)', () => {
       .send({ email, password })
       .expect(200);
 
-    const token = login.body.tokens.accessToken as string;
+    const token = (login.body as AuthBody).tokens!.accessToken as string;
 
     await request(app.getHttpServer()).get('/api/auth/me').expect(401);
 
@@ -87,6 +95,6 @@ describe('Auth (e2e)', () => {
       .set('Authorization', `Bearer ${token}`)
       .expect(200);
 
-    expect(me.body.email).toBe(email);
+    expect((me.body as AuthBody).email).toBe(email);
   });
 });

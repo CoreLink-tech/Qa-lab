@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call -- internal Counter/Histogram use Map; this is correctly typed at class level but eslint loses context on private fields */
 /**
  * Minimal in-process Prometheus text metrics (no extra dependency).
  * Multi-instance: each process exposes its own series; aggregate at scrape layer.

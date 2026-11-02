@@ -1,27 +1,21 @@
-import {
-  ConflictException,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { WebsitesService } from './websites.service';
-import { OrganizationRole } from '../generated/prisma/client';
 
 describe('WebsitesService', () => {
   let service: WebsitesService;
-  let prisma: any;
-  let projects: any;
-  let organizations: any;
-  let quotas: any;
+  let prisma: {
+    website: {
+      findUnique: jest.Mock;
+    };
+  };
+  let projects: Record<string, jest.Mock>;
+  let organizations: { requireMembership: jest.Mock };
+  let quotas: Record<string, jest.Mock>;
 
   beforeEach(() => {
     prisma = {
       website: {
         findUnique: jest.fn(),
-        findMany: jest.fn(),
-        create: jest.fn(),
-        update: jest.fn(),
-        delete: jest.fn(),
-        count: jest.fn(),
       },
     };
     projects = {
@@ -33,7 +27,12 @@ describe('WebsitesService', () => {
     quotas = {
       assertCanAddWebsite: jest.fn(),
     };
-    service = new WebsitesService(prisma, projects, organizations, quotas);
+    service = new WebsitesService(
+      prisma as never,
+      projects as never,
+      organizations as never,
+      quotas as never,
+    );
   });
 
   describe('requireWebsiteInOrganization', () => {
@@ -81,7 +80,6 @@ describe('WebsitesService', () => {
       expect(organizations.requireMembership).toHaveBeenCalledWith(
         'user-1',
         'org-a',
-        
       );
     });
   });

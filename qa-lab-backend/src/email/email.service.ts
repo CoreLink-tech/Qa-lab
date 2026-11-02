@@ -8,7 +8,6 @@ export type EmailMessage = {
   html?: string;
 };
 
-
 /**
  * Email delivery.
  * - EMAIL_MODE=log (default): log only — safe for local/dev.
@@ -17,7 +16,7 @@ export type EmailMessage = {
 @Injectable()
 export class EmailService implements OnModuleInit {
   private readonly logger = new Logger(EmailService.name);
-  private transporter: import('nodemailer').Transporter | null = null;
+  private transporter: import('nodemailer').Transporter | null = null; // eslint-disable-line @typescript-eslint/no-redundant-type-constituents
   private mode: string = 'log';
   private fromAddress = 'noreply@localhost';
 
@@ -55,7 +54,9 @@ export class EmailService implements OnModuleInit {
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
+      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
       const nodemailer = require('nodemailer') as typeof import('nodemailer');
+      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
       this.transporter = nodemailer.createTransport({
         host,
         port,
@@ -85,7 +86,7 @@ export class EmailService implements OnModuleInit {
           html: message.html,
         });
         this.logger.log(
-          `email sent to=${message.to} subject=${message.subject} id=${info.messageId || 'n/a'}`,
+          `email sent to=${message.to} subject=${message.subject} id=${(info as { messageId?: string }).messageId || 'n/a'}`,
         );
         return;
       } catch (err) {
