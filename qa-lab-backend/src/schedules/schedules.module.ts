@@ -8,7 +8,12 @@ import { SchedulesController } from './schedules.controller';
 import { SchedulesService } from './schedules.service';
 
 @Module({
-  imports: [WebsitesModule, OrganizationsModule, DomainVerifyModule, AuditModule],
+  imports: [
+    WebsitesModule,
+    OrganizationsModule,
+    DomainVerifyModule,
+    AuditModule,
+  ],
   controllers: [SchedulesController],
   providers: [SchedulesService, ScheduleTickerService],
   exports: [SchedulesService],
