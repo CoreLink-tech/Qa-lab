@@ -1,4 +1,4 @@
-import { createHmac } from 'crypto';
+import { scryptSync } from 'crypto';
 import { ApiKeysService } from './api-keys.service';
 
 describe('ApiKeysService.validateRawKey', () => {
@@ -44,12 +44,13 @@ describe('ApiKeysService.validateRawKey', () => {
 
   it('rejects revoked keys', async () => {
     const raw = 'qalab_testkeyvalue123456789012';
-    const keyHash = createHmac(
-      'sha256',
-      process.env.JWT_ACCESS_SECRET || 'qalab-api-key-v1',
-    )
-      .update(raw, 'utf8')
-      .digest('hex');
+    const pepper = process.env.JWT_ACCESS_SECRET || 'qalab-api-key-v1';
+    const salt = Buffer.from('qalab-api-key-v1|' + pepper.slice(0, 32), 'utf8');
+    const keyHash = scryptSync(raw, salt, 32, {
+      N: 16384,
+      r: 8,
+      p: 1,
+    }).toString('hex');
     prisma.apiKey.findUnique.mockResolvedValue({
       id: 'k1',
       keyHash,
@@ -65,12 +66,13 @@ describe('ApiKeysService.validateRawKey', () => {
 
   it('accepts valid key and touches lastUsedAt', async () => {
     const raw = 'qalab_testkeyvalue123456789012';
-    const keyHash = createHmac(
-      'sha256',
-      process.env.JWT_ACCESS_SECRET || 'qalab-api-key-v1',
-    )
-      .update(raw, 'utf8')
-      .digest('hex');
+    const pepper = process.env.JWT_ACCESS_SECRET || 'qalab-api-key-v1';
+    const salt = Buffer.from('qalab-api-key-v1|' + pepper.slice(0, 32), 'utf8');
+    const keyHash = scryptSync(raw, salt, 32, {
+      N: 16384,
+      r: 8,
+      p: 1,
+    }).toString('hex');
     prisma.apiKey.findUnique.mockResolvedValue({
       id: 'k1',
       keyHash,

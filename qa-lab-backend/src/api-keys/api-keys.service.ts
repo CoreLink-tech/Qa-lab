@@ -3,26 +3,22 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
+import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../database/prisma.service';
 import { OrganizationRole } from '../generated/prisma/client';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateApiKeyDto } from './dto/create-api-key.dto';
 
-/**
- * Digest for high-entropy API tokens (not user passwords).
- * Random 24-byte tokens have ~192 bits of entropy; adaptive password
- * hashes (bcrypt/scrypt) add latency without meaningful security gain.
- * CodeQL js/insufficient-password-hash does not apply to API key material.
- */
-// codeql[js/insufficient-password-hash]: API keys are high-entropy random tokens, not passwords
+/** Hash high-entropy API tokens with scrypt (CodeQL-acceptable KDF). */
 function hashApiKeyMaterial(rawKey: string): string {
   const pepper =
     process.env.API_KEY_PEPPER ||
     process.env.JWT_ACCESS_SECRET ||
     'qalab-api-key-v1';
-  return createHmac('sha256', pepper).update(rawKey, 'utf8').digest('hex');
+  // Fixed salt namespace for deterministic lookup by hash; raw key has 192 bits entropy.
+  const salt = Buffer.from('qalab-api-key-v1|' + pepper.slice(0, 32), 'utf8');
+  return scryptSync(rawKey, salt, 32, { N: 16384, r: 8, p: 1 }).toString('hex');
 }
 
 @Injectable()
