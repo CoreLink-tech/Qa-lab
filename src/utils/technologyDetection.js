@@ -1,68 +1,77 @@
-// Best-effort technology fingerprinting from signals already available
-// during a normal page fetch: response headers, the meta generator tag,
-// known script/stylesheet path fragments, and cookie names.
-//
-// This is deliberately a small, curated signature list, not an attempt
-// at a comprehensive Wappalyzer-style database. Entries are only added
-// when the signal is reasonably unambiguous (e.g. "/wp-content/" really
-// does mean WordPress) rather than guessed from weak clues.
+// Best-effort technology fingerprinting from response headers, meta
+// generator, resource URLs, and cookie names.
 
 "use strict";
 
 /**
- * Extract hostname from a resource URL/path. Uses the URL parser so
- * host checks are not based on incomplete substring matches (CodeQL).
  * @param {string} raw
- * @returns {string}
+ * @returns {{ host: string, pathname: string }}
  */
-function resourceHostname(raw) {
-  if (typeof raw !== "string" || !raw) return "";
+function parseResource(raw) {
+  if (typeof raw !== "string" || !raw) {
+    return { host: "", pathname: "" };
+  }
   try {
-    // Absolute URL
     if (raw.includes("://") || raw.startsWith("//")) {
       const href = raw.startsWith("//") ? `https:${raw}` : raw;
-      return new URL(href).hostname.toLowerCase();
+      const u = new URL(href);
+      return {
+        host: u.hostname.toLowerCase(),
+        pathname: u.pathname || "/",
+      };
     }
   } catch {
-    /* fall through */
+    /* ignore */
   }
-  // Relative path — no host
-  return "";
+  // Relative path — treat entire string as pathname
+  return { host: "", pathname: raw.startsWith("/") ? raw : `/${raw}` };
 }
 
-/**
- * True if any resource path's hostname equals or is a subdomain of host.
- * @param {string[]} paths
- * @param {string} host
- */
+/** @param {string} host @param {string} target */
+function hostEqualsOrSubdomain(host, target) {
+  if (!host || !target) return false;
+  const h = host.toLowerCase();
+  const t = target.toLowerCase();
+  return h === t || h.endsWith("." + t);
+}
+
+/** @param {string} pathname @param {string} segment */
+function pathHasSegment(pathname, segment) {
+  // Match /segment/ or /segment at end without substring tricks on full URLs
+  const p = pathname.toLowerCase();
+  const s = segment.toLowerCase();
+  const parts = p.split("/").filter(Boolean);
+  return parts.some((part) => part === s || part.startsWith(s + "."));
+}
+
+/** @param {string[]} paths @param {string} host */
 function hostInResources(paths, host) {
-  const target = host.toLowerCase();
-  for (const p of paths) {
-    const h = resourceHostname(p);
-    if (!h) continue;
-    if (h === target || h.endsWith(`.${target}`)) return true;
+  for (const raw of paths) {
+    const { host: h } = parseResource(raw);
+    if (hostEqualsOrSubdomain(h, host)) return true;
   }
   return false;
 }
 
-/**
- * Path-fragment match on pathname only (after URL parse when absolute).
- * @param {string[]} paths
- * @param {(pathname: string) => boolean} pred
- */
-function pathMatch(paths, pred) {
+/** @param {string[]} paths @param {string} segment */
+function segmentInResources(paths, segment) {
   for (const raw of paths) {
-    if (typeof raw !== "string") continue;
-    let pathname = raw;
-    try {
-      if (raw.includes("://") || raw.startsWith("//")) {
-        const href = raw.startsWith("//") ? `https:${raw}` : raw;
-        pathname = new URL(href).pathname;
+    const { pathname } = parseResource(raw);
+    if (pathHasSegment(pathname, segment)) return true;
+  }
+  return false;
+}
+
+/** @param {string[]} paths @param {string} needle in a path part */
+function pathPartContains(paths, needle) {
+  const n = needle.toLowerCase();
+  for (const raw of paths) {
+    const { pathname } = parseResource(raw);
+    for (const part of pathname.toLowerCase().split("/").filter(Boolean)) {
+      if (part === n || part.startsWith(n + ".") || part.startsWith(n + "-") || part.startsWith(n + "_")) {
+        return true;
       }
-    } catch {
-      pathname = raw;
     }
-    if (pred(pathname)) return true;
   }
   return false;
 }
@@ -72,11 +81,9 @@ const SIGNATURES = [
     name: "WordPress",
     category: "CMS",
     test: (ctx) =>
-      ctx.generator.toLowerCase().includes("wordpress") ||
-      pathMatch(
-        ctx.resourcePaths,
-        (p) => p.includes("/wp-content/") || p.includes("/wp-includes/"),
-      ),
+      ctx.generator.toLowerCase().indexOf("wordpress") !== -1 ||
+      segmentInResources(ctx.resourcePaths, "wp-content") ||
+      segmentInResources(ctx.resourcePaths, "wp-includes"),
   },
   {
     name: "Shopify",
@@ -85,44 +92,43 @@ const SIGNATURES = [
       ctx.headers["x-shopify-stage"] !== undefined ||
       hostInResources(ctx.resourcePaths, "cdn.shopify.com") ||
       ctx.cookieNames.some(
-        (c) => c.includes("_shopify_") || c === "cart_currency",
+        (c) => c.indexOf("_shopify_") !== -1 || c === "cart_currency",
       ),
   },
   {
     name: "Wix",
     category: "Website Builder",
     test: (ctx) =>
-      ctx.generator.toLowerCase().includes("wix") ||
+      ctx.generator.toLowerCase().indexOf("wix") !== -1 ||
       hostInResources(ctx.resourcePaths, "static.wixstatic.com"),
   },
   {
     name: "Squarespace",
     category: "Website Builder",
     test: (ctx) =>
-      ctx.generator.toLowerCase().includes("squarespace") ||
+      ctx.generator.toLowerCase().indexOf("squarespace") !== -1 ||
       hostInResources(ctx.resourcePaths, "squarespace.com"),
   },
   {
     name: "Webflow",
     category: "Website Builder",
     test: (ctx) =>
-      ctx.generator.toLowerCase().includes("webflow") ||
+      ctx.generator.toLowerCase().indexOf("webflow") !== -1 ||
       hostInResources(ctx.resourcePaths, "website-files.com"),
   },
   {
     name: "Drupal",
     category: "CMS",
     test: (ctx) =>
-      ctx.generator.toLowerCase().includes("drupal") ||
+      ctx.generator.toLowerCase().indexOf("drupal") !== -1 ||
       String(ctx.headers["x-generator"] || "")
         .toLowerCase()
-        .includes("drupal"),
+        .indexOf("drupal") !== -1,
   },
   {
     name: "jQuery",
     category: "JavaScript Library",
-    test: (ctx) =>
-      pathMatch(ctx.resourcePaths, (p) => p.toLowerCase().includes("jquery")),
+    test: (ctx) => pathPartContains(ctx.resourcePaths, "jquery"),
   },
   {
     name: "Google Analytics / Tag Manager",
@@ -135,35 +141,48 @@ const SIGNATURES = [
     name: "Cloudflare",
     category: "CDN / Security",
     test: (ctx) =>
-      ctx.headers["server"]?.toLowerCase() === "cloudflare" ||
+      String(ctx.headers["server"] || "").toLowerCase() === "cloudflare" ||
       ctx.headers["cf-ray"] !== undefined,
   },
   {
     name: "PHP",
     category: "Language / Runtime",
-    test: (ctx) =>
-      String(ctx.headers["x-powered-by"] || "")
-        .toLowerCase()
-        .includes("php") ||
-      ctx.cookieNames.some((c) => c.toUpperCase() === "PHPSESSID"),
+    test: (ctx) => {
+      const powered = String(ctx.headers["x-powered-by"] || "").toLowerCase();
+      // Token match on header product list, not URL sanitization
+      const products = powered.split(/\s+/);
+      const isPhp = products.some(
+        (tok) => tok === "php" || tok.startsWith("php/"),
+      );
+      return (
+        isPhp || ctx.cookieNames.some((c) => c.toUpperCase() === "PHPSESSID")
+      );
+    },
   },
   {
     name: "ASP.NET",
     category: "Language / Runtime",
-    test: (ctx) =>
-      String(ctx.headers["x-powered-by"] || "")
-        .toLowerCase()
-        .includes("asp.net") ||
-      ctx.headers["x-aspnet-version"] !== undefined ||
-      ctx.cookieNames.some((c) => c.toUpperCase() === "ASP.NET_SESSIONID"),
+    test: (ctx) => {
+      const powered = String(ctx.headers["x-powered-by"] || "").toLowerCase();
+      const products = powered.split(/[\s,]+/);
+      const isAsp = products.some(
+        (tok) => tok === "asp.net" || tok.startsWith("asp.net"),
+      );
+      return (
+        isAsp ||
+        ctx.headers["x-aspnet-version"] !== undefined ||
+        ctx.cookieNames.some((c) => c.toUpperCase() === "ASP.NET_SESSIONID")
+      );
+    },
   },
   {
     name: "Express / Node.js",
     category: "Language / Runtime",
-    test: (ctx) =>
-      String(ctx.headers["x-powered-by"] || "")
-        .toLowerCase()
-        .includes("express"),
+    test: (ctx) => {
+      const powered = String(ctx.headers["x-powered-by"] || "").toLowerCase();
+      const products = powered.split(/[\s,]+/);
+      return products.some((tok) => tok === "express");
+    },
   },
 ];
 
