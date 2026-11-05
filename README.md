@@ -1,420 +1,174 @@
 # QA Lab
 
-Website quality-assurance platform: **CLI scanner**, **NestJS API**, **BullMQ worker**, and **Next.js dashboard**.
+[![CI](https://github.com/CoreLink-tech/Qa-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/CoreLink-tech/Qa-lab/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
+[![Docker](https://img.shields.io/badge/docker-compose-blue)](./docker-compose.yml)
 
-This README matches the codebase on `main`. Marketing language is avoided on purpose.
+**QA Lab** is a modular website quality-assurance and security-scanning platform. It crawls sites, evaluates performance, SEO, accessibility, forms, links, and security headers, and produces scored HTML/JSON reports. A NestJS API, BullMQ worker, and Next.js dashboard support multi-tenant operation.
 
-## Components
+## Problem
 
-| Component | Path | Default port |
-|-----------|------|----------------|
-| Scanner CLI / library | `src/` | — |
-| API | `qa-lab-backend/` (`RUN_MODE=api`) | 3000 |
-| Worker | `qa-lab-backend/` (`RUN_MODE=worker`) | — |
-| Dashboard | `apps/web/` | 3001 |
-| Postgres + Redis | `docker-compose.yml` | 5432 / 6379 |
+Teams need repeatable website QA beyond one-off Lighthouse runs: link integrity, form and header checks, accessibility signals, and a path to scheduled multi-tenant scanning with clear tenancy boundaries. QA Lab combines a focused scanner library with an API and worker suitable for productization.
 
-## Quick start (local)
+## Key features
+
+- **CLI scanner** — crawl with depth/page limits; checks for SEO, accessibility, links, forms, assets, exposed paths, security headers
+- **Scored reports** — HTML and JSON with severity classification
+- **Multi-tenant API** — organizations, projects, websites, scans, schedules, API keys
+- **Auth** — register/login, rotating refresh cookies, optional TOTP, scoped API keys
+- **SSRF controls** — DNS resolution policy, private IP blocking, pinned outbound HTTP
+- **Worker** — queue-based scans, wall-clock timeout, optional process isolation
+- **Dashboard** — Next.js UI (see `apps/web/`)
+
+## Architecture overview
+
+```
+Browser / CLI  →  Next.js (apps/web)  →  NestJS API (qa-lab-backend)
+                                              ↓
+                                         Postgres + Redis
+                                              ↓
+                                         BullMQ Worker → Scanner library (src/)
+```
+
+| Component | Path | Role |
+|-----------|------|------|
+| Scanner | `src/` | Crawl + checks + reports |
+| API | `qa-lab-backend/` (`RUN_MODE=api`) | HTTP API, auth, tenancy |
+| Worker | `qa-lab-backend/` (`RUN_MODE=worker`) | Job consumer |
+| Web | `apps/web/` | Dashboard |
+| Infra | `docker-compose.yml` | Postgres, Redis |
+
+See `docs/ARCHITECTURE.md` for detail.
+
+## Technology stack
+
+- **Runtime:** Node.js 20+ / 22
+- **Scanner:** CommonJS libraries under `src/`
+- **API:** NestJS 11, Prisma 7, PostgreSQL, Redis, BullMQ
+- **Web:** Next.js 15, React, Tailwind
+- **CI:** GitHub Actions, CodeQL, Trivy (filesystem)
+
+## Prerequisites
+
+- Node.js 20 or 22
+- Docker and Docker Compose (for Postgres/Redis)
+- npm 10+
+
+## Local setup
 
 ```bash
+git clone https://github.com/CoreLink-tech/Qa-lab.git
+cd Qa-lab
+cp .env.example .env
+
 docker compose up -d
 
+# Scanner / root
+npm ci
+
+# Backend
 cd qa-lab-backend
-cp .env.example .env   # JWT_ACCESS_SECRET and JWT_REFRESH_SECRET ≥ 32 chars
-# CORS_ORIGIN=http://localhost:3001
+cp .env.example .env   # set JWT_* secrets ≥ 32 characters
 npm ci
 npx prisma migrate deploy
-npm run prisma:generate
-# Dev all-in-one (API + in-process worker):
-npm run start:dev
-# Production-like split:
-# RUN_MODE=api npm run start:dev
-# npm run start:worker:dev
+npx prisma generate
+npm run start:dev      # API + in-process worker when RUN_MODE=all
 
-cd ../apps/web
+# Dashboard (other terminal)
+cd apps/web
 cp .env.example .env.local
 npm ci
 npm run dev
 ```
 
 - UI: http://localhost:3001  
-- Swagger: http://localhost:3000/api/docs  
-- Health: http://localhost:3000/api/health/ready  
+- API docs: http://localhost:3000/api/docs  
+- Health: http://localhost:3000/api/health/live  
 
-## What works end-to-end
+## Environment variables
 
-1. Register / login (refresh cookie + access token).
-2. Organization → project → website.
-3. Domain verification (required for schedules and exposed-path probes).
-4. Queue a scan (JWT or API key with `scans:write`).
-5. Worker runs scanner (SSRF-checked), stores report.
-6. View scan detail / download JSON in the UI.
-7. Schedules (verified domains), quotas, API keys, audit log rows.
+Root `.env.example` and `qa-lab-backend/.env.example` document variables. Critical:
 
-## Security (brief)
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | Redis for queues |
+| `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | ≥ 32 character secrets |
+| `CORS_ORIGIN` | Allowed browser origin |
+| `QA_LAB_SCANNER_ROOT` | Path to scanner lib in containers |
+| `SCAN_ISOLATION=child` | Optional per-scan child process |
+| `EMAIL_MODE` / `SMTP_*` | Email delivery (default log-only) |
 
-- SSRF hardening on outbound fetch (see `src/utils/ssrfGuard.js`, `safeHttp.js`).
-- Passive security rules only in the scanner.
-- bcrypt cost 12; refresh token rotation with reuse detection.
-- Redis-backed throttling; login lockout.
-- Dashboard: no access tokens in `localStorage`; CSP headers.
+Never commit real `.env` files.
 
-Details: `docs/ARCHITECTURE.md` (threat model + **Known limitations**).
+## Docker
 
-## Production notes
-
-- Use `docker-compose.prod.yml` with separate **api** and **worker** images.
-- Run migrations as a one-shot job (see `docs/OPERATIONS.md`).
-- Configure real email before relying on verification links (`EMAIL_MODE=log` by default).
-
-## API (selected)
-
-| Area | Endpoints |
-|------|-----------|
-| Auth | `register`, `login`, `refresh`, `logout`, `me`, `verify-email`, `forgot-password`, `reset-password` |
-| Tenancy | organizations, projects, websites |
-| Scans | `POST/GET /scans`, cancel (JWT or API key) |
-| Schedules | CRUD under `/schedules` |
-| API keys | create / list / revoke |
-| Domain | `POST /websites/:id/verify/start\|confirm` |
-| Ops | `/health/live`, `/health/ready`, `/metrics` |
-
-## Further documentation
-
-| Doc | Topic |
-|-----|--------|
-| `docs/ARCHITECTURE.md` | System design, threat model, limitations |
-| `docs/AUTH.md` | Sessions and cookies |
-| `docs/API_KEYS.md` | Key auth + CI curl example |
-| `docs/WORKER.md` | `RUN_MODE`, limits |
-| `docs/QUOTAS_AND_SCHEDULES.md` | Plans and verification |
-| `docs/TESTING.md` | Tests and IDOR catalog |
-| `docs/OPERATIONS.md` | Runbook, retention, backups |
-| `docs/CI_AND_BRANCH_PROTECTION.md` | Required checks |
-
----
-
-## CLI scanner
-
-
-# Features
-
-## Website Crawling
-
-- Multi-page website crawling
-- Internal link discovery
-- Configurable crawl depth
-- Duplicate URL prevention
-- Website structure analysis
-
----
-
-## Website Analysis
-
-QA Lab currently performs automated analysis across multiple quality categories.
-
-### SEO
-
-- Missing H1 headings
-- Multiple H1 headings
-- Missing meta descriptions
-- SEO best-practice validation
-
-### Accessibility
-
-- Missing image alt attributes
-- Accessibility best-practice checks
-
-### Security
-
-Checks important HTTP security headers including:
-
-- Content Security Policy (CSP)
-- Strict-Transport-Security
-- X-Frame-Options
-- X-Content-Type-Options
-
-Also checks (always on, no extra requests):
-
-- HTTPS enforcement, CSP strength, cookie flags, mixed content, server
-  version disclosure
-- Disclosed database/application errors (SQL syntax errors, stack traces)
-  already present in a fetched page's HTML
-
-Opt-in (`--check-exposed-paths`, makes extra requests against the target):
-
-- Well-known sensitive files (`.env`, `.git/config`, backup files) that
-  are publicly reachable
-- Directory listings left enabled
-- Default admin panel paths (informational only -- not a vulnerability by
-  itself)
-- Missing `security.txt`
-
-This is purely passive: it only reads the response of a fixed list of
-static URLs. It never sends payloads and never attempts to exploit
-anything. Only run it against sites you own or are authorized to test.
-
-### Performance
-
-- Response time analysis
-- Slow page detection
-- Performance quality scoring
-
-### Forms
-
-- Missing input names
-- Missing autocomplete attributes
-- Form quality validation
-
-### Links
-
-- Link extraction
-- Link validation
-- Broken link detection
-
-### Assets
-
-- Asset inspection
-- Website resource validation
-
-### Functionality
-
-- General website functionality checks
-
----
-
-# Reports
-
-QA Lab automatically generates both machine-readable and human-readable reports.
-
-Supported report formats:
-
-- JSON
-- HTML
-
-Each report includes:
-
-- Overall Quality Score
-- Letter Grade
-- Severity Breakdown
-- Detailed Findings
-- Actionable Recommendations
-
----
-
-# Scoring System
-
-Every website receives:
-
-- Overall Score
-- Letter Grade
-- Issue Summary
-
-Issue severities include:
-
-- Critical
-- High
-- Medium
-- Low
-
----
-
-# Project Structure
-
-```text
-src/
-├── crawler.js
-├── pageScanner.js
-├── scanner.js
-├── normalizer.js
-├── websiteModel.js
-├── ruleEngine.js
-├── scoring.js
-├── report.js
-├── exporter.js
-├── recommendations/
-├── rules/
-│   ├── accessibilityRules.js
-│   ├── assetRules.js
-│   ├── formRules.js
-│   ├── functionalityRules.js
-│   ├── linkRules.js
-│   ├── performanceRules.js
-│   ├── securityRules.js
-│   └── seoRules.js
-└── utils.js
-```
-
----
-
-# Installation
-
-Clone the repository:
+**Development (Postgres + Redis):**
 
 ```bash
-git clone https://github.com/CoreLink-tech/QA-Lab.git
+docker compose up -d
 ```
 
-Move into the project:
+**Production-oriented (API + worker images):**
 
 ```bash
-cd QA-Lab
+docker compose -f docker-compose.prod.yml up -d --build
+# Migrations:
+docker compose -f docker-compose.prod.yml --profile migrate run --rm migrate
 ```
 
-Install dependencies:
+Build targets: `docker build -f qa-lab-backend/Dockerfile --target api|worker -t qa-lab-api|qa-lab-worker .`
+
+## Development commands
 
 ```bash
-npm install
+# Scanner
+npm test                 # root scanner tests
+npm start -- --help      # CLI help (see src/index.js)
+
+# Backend
+cd qa-lab-backend
+npm run lint
+npm run typecheck
+npm run build
+npm test
+npm run test:cov
+npm run start:dev
+npm run start:worker:dev
+
+# Web
+cd apps/web
+npm run lint
+npm run build
+npm run dev
 ```
 
----
+## Security notes
 
-# Usage
+- Report vulnerabilities per `SECURITY.md` (private disclosure).
+- Outbound fetches use SSRF guards; production blocks private/link-local targets.
+- Residual risks are listed in `docs/KNOWN_LIMITATIONS.md`.
 
-Run a website scan:
+## Contributing
 
-```bash
-node src/index.js https://example.com
-```
+See [CONTRIBUTING.md](./CONTRIBUTING.md). Prefer small PRs with tests for scanner and backend changes.
 
-Generate a summary:
+## Roadmap
 
-```bash
-node src/index.js https://example.com --summary
-```
+- Harden TOTP (KMS, required policy for privileged roles)
+- Full Playwright journey as a hard CI gate
+- Stronger path coverage on auth, schedules, and worker
+- Production web image and TLS reverse-proxy examples
 
-Display detected issues:
+## Screenshots / demo
 
-```bash
-node src/index.js https://example.com --issues
-```
+_Placeholder: add dashboard and report screenshots under `docs/images/` when available._
 
-Reports are automatically generated inside:
+## License
 
-```text
-reports/
-├── report.json
-└── report.html
-```
+This project is licensed under the **MIT License** — see [LICENSE](./LICENSE).
 
-## Quality Gates (CI/CD)
+Copyright (c) 2026 David Ashe.
 
-QA Lab can fail its own exit code based on scan results, so it can act as a
-build gate instead of just a report generator:
-
-```bash
-# Exit 1 if any finding is "high" severity or worse
-node src/index.js https://example.com --fail-on=high
-
-# Exit 1 if the overall score drops below 70
-node src/index.js https://example.com --min-score=70
-
-# Both conditions can be combined -- either one failing fails the gate
-node src/index.js https://example.com --fail-on=critical --min-score=70
-```
-
-Reports are still written even when the gate fails, so a failed CI run has
-something to inspect. See `.github/workflows/test.yml` for the workflow that
-runs QA Lab's own test suite, and
-`.github/workflows/qa-lab-quality-gate.yml.example` for a template you can
-copy into another repo to scan and gate a site of your own.
-
----
-
-# Architecture
-
-QA Lab follows a modular architecture.
-
-Each component has a single responsibility.
-
-- Crawler
-- Page Scanner
-- Website Normalizer
-- Website Model
-- Rule Engine
-- Recommendation Engine
-- Scoring Engine
-- Report Generator
-
-This design keeps the project maintainable, scalable, and easy to extend.
-
----
-
-# Current Status
-
-QA Lab is under active development.
-
-The core website analysis engine is functional and continues to receive improvements in rule coverage, reporting, scoring, and overall accuracy.
-
----
-
-# Roadmap
-
-Upcoming features include:
-
-- Backend API
-- User Authentication
-- Dashboard
-- Project Management
-- Team Workspaces
-- PR comment posting for CI quality gate results
-- Plugin System
-- Public API
-- Continuous Website Monitoring
-- Cloud Deployment
-- Enterprise Reporting
-
----
-
-# Vision
-
-Our goal is to build a comprehensive website Quality Assurance platform that combines automated crawling, website analysis, accessibility validation, SEO auditing, performance testing, security analysis, and intelligent reporting into a single developer-friendly solution.
-
----
-
-# Contributing
-
-Contributions, ideas, feature requests, and bug reports are welcome.
-
-If you'd like to contribute:
-
-1. Fork the repository.
-2. Create a feature branch.
-3. Commit your changes.
-4. Open a Pull Request.
-
----
-
-# License
-
-This project is currently proprietary.
-
-All rights reserved.
-
-The source code may not be copied, modified, distributed, or used commercially without explicit permission from the project owner.
-
----
-
-# Author
-
-Developed by **CoreLink Technologies**.
-
-Building next-generation tools for software quality assurance and developer productivity.
-
-
----
-
-## Engineering status (honest)
-
-See `docs/KNOWN_LIMITATIONS.md` and `docs/ARCHITECTURE.md` for residual risk.
-
-- Phase 1 (green build / honest CI): delivered on branch `fix/02-green-ci` / PR #24
-- Phase 2 (proof tests / SSRF four points): branch `phase2/prove-claims` / PR #25
-- Phase 3+ (CSRF origin check, TOTP service, CSP tighten, prod compose, Dependabot groups): this tree
-
-Do not describe the product as “production-grade” until the Definition of Done in the engineering brief is met with green CI evidence.
-
-
-### Worker isolation
-
-Set `SCAN_ISOLATION=child` on worker processes to run each scan in a forked Node child that is killed on wall-clock timeout.
+MIT is used because it is simple, widely recognized, allows commercial use and redistribution (including AI training and dataset preparation), and preserves copyright ownership for the author. A future non-exclusive commercial arrangement can coexist with MIT for the public codebase.

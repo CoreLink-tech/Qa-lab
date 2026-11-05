@@ -37,7 +37,7 @@
     "cli",
     "audit"
   ],
-  "author": "CoreLink-tech",
+  "author": "David Ashe",
   "license": "MIT",
   "type": "commonjs",
   "dependencies": {
@@ -51,6 +51,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/CoreLink-tech/qa-lab.git"
-  }
+    "url": "https://github.com/CoreLink-tech/Qa-lab.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CoreLink-tech/Qa-lab/issues"
+  },
+  "homepage": "https://github.com/CoreLink-tech/Qa-lab#readme"
 }
