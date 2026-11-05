@@ -97,4 +97,36 @@ describe('Auth (e2e)', () => {
 
     expect((me.body as AuthBody).email).toBe(email);
   });
+
+  it('refresh rotates tokens and reuse of old refresh is rejected', async () => {
+    const login = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ email, password })
+      .expect(200);
+
+    const body = login.body as {
+      tokens?: { accessToken?: string; refreshToken?: string };
+    };
+    const refresh1 = body.tokens?.refreshToken;
+    if (!refresh1) return;
+
+    const rotated = await request(app.getHttpServer())
+      .post('/api/auth/refresh')
+      .send({ refreshToken: refresh1 })
+      .expect(200);
+
+    const body2 = rotated.body as {
+      tokens?: { refreshToken?: string };
+    };
+    expect(body2.tokens?.refreshToken).toBeTruthy();
+    expect(body2.tokens?.refreshToken).not.toBe(refresh1);
+
+    // Reuse of the old refresh must fail (family burned)
+    await request(app.getHttpServer())
+      .post('/api/auth/refresh')
+      .send({ refreshToken: refresh1 })
+      .expect((r) => {
+        expect([401, 403]).toContain(r.status);
+      });
+  });
 });

@@ -12,6 +12,7 @@ import { AuditService } from '../audit/audit.service';
 import { QuotasService } from '../quotas/quotas.service';
 import { DomainVerifyService } from '../domain-verify/domain-verify.service';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
+import { assertSafeExternalUrl } from '../common/security/assert-safe-url';
 
 @Injectable()
 export class SchedulesService {
@@ -40,6 +41,9 @@ export class SchedulesService {
     );
 
     await this.domainVerify.assertVerified(dto.websiteId);
+
+    // Re-validate stored URL at schedule create
+    await assertSafeExternalUrl(website.url);
 
     const intervalHours = dto.intervalHours ?? 24;
     await this.quotas.assertScheduleInterval(

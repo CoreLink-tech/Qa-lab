@@ -76,6 +76,9 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: qa-lab-backend/package-lock.json
+      - name: Install root scanner deps (SSRF guard)
+        working-directory: .
+        run: npm ci
       - name: Install
         run: npm ci
       - name: Prisma generate
@@ -92,6 +95,9 @@ jobs:
         run: npm run test:cov
       - name: E2E health
         run: npm run test:e2e
+      - name: Schema drift check
+        run: |
+          npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --exit-code
       - name: Audit (high+)
         run: npm audit --omit=dev --audit-level=high
 

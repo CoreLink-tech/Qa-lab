@@ -10,6 +10,7 @@ import { OrganizationsService } from '../organizations/organizations.service';
 import { type ScanJobPayload } from '../queue/queue.constants';
 import { ScanQueueService } from '../queue/scan-queue.service';
 import { WebsitesService } from '../websites/websites.service';
+import { assertSafeExternalUrl } from '../common/security/assert-safe-url';
 import { QuotasService } from '../quotas/quotas.service';
 import { DomainVerifyService } from '../domain-verify/domain-verify.service';
 import { CreateScanDto } from './dto/create-scan.dto';
@@ -58,6 +59,8 @@ export class ScansService {
     dto: CreateScanDto,
     trigger: typeof ScanTrigger.API | typeof ScanTrigger.MANUAL,
   ) {
+    // Re-validate stored URL at scan enqueue (defense in depth)
+    await assertSafeExternalUrl(website.url);
     const options = {
       maxPages: dto.maxPages ?? 50,
       maxDepth: dto.maxDepth ?? 2,

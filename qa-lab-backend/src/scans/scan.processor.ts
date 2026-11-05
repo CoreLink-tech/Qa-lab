@@ -12,6 +12,7 @@ import { SCAN_QUEUE_NAME, type ScanJobPayload } from '../queue/queue.constants';
 import { getScannerLibrary } from './scanner-bridge';
 import { OrgConcurrencyLimiter } from './org-concurrency.limiter';
 import { metrics } from '../observability/metrics';
+import { assertSafeExternalUrl } from '../common/security/assert-safe-url';
 
 const DEFAULT_SCAN_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes wall clock
 const DEFAULT_MAX_PAGES = 50;
@@ -141,6 +142,9 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
         (options.maxPages as number) ?? DEFAULT_MAX_PAGES,
         Number(process.env.SCAN_HARD_MAX_PAGES) || 200,
       );
+
+      // Final SSRF check immediately before outbound fetch
+      await assertSafeExternalUrl(scan.website.url);
 
       const { scan: runScan } = getScannerLibrary();
 
