@@ -1,15 +1,19 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Job, Worker } from 'bullmq';
 import { PrismaService } from '../database/prisma.service';
-import { ScanStatus } from '../generated/prisma/client';
-import {
-  SCAN_QUEUE_NAME,
-  type ScanJobPayload,
-} from '../queue/queue.constants';
+import { Prisma, ScanStatus } from '../generated/prisma/client';
+import { SCAN_QUEUE_NAME, type ScanJobPayload } from '../queue/queue.constants';
 import { getScannerLibrary } from './scanner-bridge';
 import { OrgConcurrencyLimiter } from './org-concurrency.limiter';
 import { metrics } from '../observability/metrics';
+import { assertSafeExternalUrl } from '../common/security/assert-safe-url';
+import { runScanInChild } from './scan-child-runner';
 
 const DEFAULT_SCAN_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes wall clock
 const DEFAULT_MAX_PAGES = 50;
@@ -38,9 +42,7 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit(): void {
     if (this.runMode === 'api') {
-      this.logger.log(
-        'RUN_MODE=api — scan worker not started in this process',
-      );
+      this.logger.log('RUN_MODE=api — scan worker not started in this process');
       return;
     }
 
@@ -48,7 +50,7 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
       host: this.config.get<string>('redis.host') || 'localhost',
       port: this.config.get<number>('redis.port') || 6379,
       password: this.config.get<string>('redis.password') || undefined,
-      maxRetriesPerRequest: null as null,
+      maxRetriesPerRequest: null,
     };
 
     this.worker = new Worker<ScanJobPayload>(
@@ -93,7 +95,9 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
 
   private async process(job: Job<ScanJobPayload>): Promise<void> {
     const { scanId } = job.data;
-    this.logger.log(`Processing scan ${scanId} (attempt ${job.attemptsMade + 1})`);
+    this.logger.log(
+      `Processing scan ${scanId} (attempt ${job.attemptsMade + 1})`,
+    );
 
     const scan = await this.prisma.scan.findUnique({
       where: { id: scanId },
@@ -140,10 +144,29 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
         Number(process.env.SCAN_HARD_MAX_PAGES) || 200,
       );
 
-      const { scan: runScan } = getScannerLibrary();
+      // Final SSRF check immediately before outbound fetch
+      await assertSafeExternalUrl(scan.website.url);
 
-      const result = await this.withTimeout(
-        runScan({
+      const useChild =
+        (process.env.SCAN_ISOLATION || '').toLowerCase() === 'child';
+      const controller = new AbortController();
+      let result: {
+        status: string;
+        pagesScanned?: number;
+        error?: string;
+        overallScore?: number;
+        grade?: string;
+        findings?: unknown[];
+        recommendations?: unknown[];
+        summary?: Record<string, unknown>;
+        scanId?: string;
+        startUrl?: string;
+        startedAt?: string;
+        completedAt?: string;
+      };
+
+      if (useChild) {
+        result = await runScanInChild({
           startUrl: scan.website.url,
           scanId,
           maxPages,
@@ -152,24 +175,38 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
           respectRobotsTxt: (options.respectRobotsTxt as boolean) ?? true,
           checkExposedPaths: (options.checkExposedPaths as boolean) ?? false,
           checkAssets: (options.checkAssets as boolean) ?? false,
-          writeReports: false,
-          onProgress: (event: {
-            type?: string;
-            pagesScanned?: number;
-          }) => {
-            if (event.type === 'page' && event.pagesScanned != null) {
-              void this.prisma.scan
-                .update({
-                  where: { id: scanId },
-                  data: { pagesScanned: event.pagesScanned },
-                })
-                .catch(() => undefined);
-            }
-          },
-        }),
-        this.scanTimeoutMs,
-        scanId,
-      );
+          timeoutMs: this.scanTimeoutMs,
+        });
+      } else {
+        const { scan: runScan } = getScannerLibrary();
+        result = await this.withTimeout(
+          runScan({
+            startUrl: scan.website.url,
+            scanId,
+            maxPages,
+            maxDepth: (options.maxDepth as number) ?? 2,
+            concurrency: (options.concurrency as number) ?? 5,
+            respectRobotsTxt: (options.respectRobotsTxt as boolean) ?? true,
+            checkExposedPaths: (options.checkExposedPaths as boolean) ?? false,
+            checkAssets: (options.checkAssets as boolean) ?? false,
+            writeReports: false,
+            signal: controller.signal,
+            onProgress: (event: { type?: string; pagesScanned?: number }) => {
+              if (event.type === 'page' && event.pagesScanned != null) {
+                void this.prisma.scan
+                  .update({
+                    where: { id: scanId },
+                    data: { pagesScanned: event.pagesScanned },
+                  })
+                  .catch(() => undefined);
+              }
+            },
+          }),
+          this.scanTimeoutMs,
+          scanId,
+          controller,
+        );
+      }
 
       const current = await this.prisma.scan.findUnique({
         where: { id: scanId },
@@ -232,7 +269,7 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
             score: Math.round(result.overallScore ?? 0),
             grade: result.grade ?? 'F',
             issueCount: findings.length,
-            reportJson,
+            reportJson: reportJson as Prisma.InputJsonValue,
             reportHtml: null,
           },
         }),
@@ -248,7 +285,7 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
       ]);
 
       this.logger.log(
-        `Scan ${scanId} completed — score ${result.overallScore} (${result.grade}), ${findings.length} findings`,
+        `Scan ${scanId} completed — score ${String(result.overallScore)} (${String(result.grade)}), ${findings.length} findings`,
       );
     } catch (error) {
       const message = (error as Error).message || String(error);
@@ -273,14 +310,27 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Race the scan promise against a wall-clock timer. On timeout, abort the
+   * AbortController so the scanner/crawler can stop fetching new pages
+   * instead of only rejecting the outer promise while work continues.
+   */
   private withTimeout<T>(
     promise: Promise<T>,
     ms: number,
     scanId: string,
+    controller?: AbortController,
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
-        reject(new Error(`Scan ${scanId} exceeded wall-clock timeout of ${ms}ms`));
+        try {
+          controller?.abort();
+        } catch {
+          /* ignore */
+        }
+        reject(
+          new Error(`Scan ${scanId} exceeded wall-clock timeout of ${ms}ms`),
+        );
       }, ms);
       promise
         .then((v) => {
@@ -289,7 +339,7 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
         })
         .catch((err) => {
           clearTimeout(timer);
-          reject(err);
+          reject(err instanceof Error ? err : new Error(String(err)));
         });
     });
   }

@@ -29,7 +29,9 @@ jobs:
         run: npm test
         timeout-minutes: 5
       - name: Audit (high+)
-        run: npm audit --omit=dev --audit-level=high || true
+        # web: postcss via next@15 is a known exception (docs/AUDIT_EXCEPTIONS.md, expires 2026-12-15)
+        # Root and backend must stay at high.
+        run: npm audit --omit=dev --audit-level=high
 
   backend:
     name: Backend lint, typecheck, build, test
@@ -74,6 +76,9 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: qa-lab-backend/package-lock.json
+      - name: Install root scanner deps (SSRF guard)
+        working-directory: .
+        run: npm ci
       - name: Install
         run: npm ci
       - name: Prisma generate
@@ -81,18 +86,20 @@ jobs:
       - name: Prisma migrate deploy
         run: npx prisma migrate deploy
       - name: Lint
-        run: npm run lint || true
+        run: npm run lint
       - name: Typecheck
         run: npm run typecheck
-        continue-on-error: true
       - name: Build
         run: npm run build
-        continue-on-error: true
       - name: Unit tests with coverage
         run: npm run test:cov
-        continue-on-error: true
+      - name: E2E health
+        run: npm run test:e2e
+      - name: Schema drift check
+        run: |
+          npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code
       - name: Audit (high+)
-        run: npm audit --omit=dev --audit-level=high || true
+        run: npm audit --omit=dev --audit-level=high
 
   web:
     name: Web lint, typecheck, build
@@ -111,18 +118,134 @@ jobs:
         run: npm ci
       - name: Typecheck
         run: npm run typecheck
-        continue-on-error: true
       - name: Build
         run: npm run build
-        continue-on-error: true
-      - name: Audit (high+)
-        run: npm audit --omit=dev --audit-level=high || true
+      - name: Audit (high+ with documented exception)
+        # postcss via next@15 is a known exception (docs/AUDIT_EXCEPTIONS.md, expires 2026-12-15)
+        # Root and backend stay at --audit-level=high with zero high vulns.
+        run: npm audit --omit=dev --audit-level=critical
 
   docker:
-    name: Docker image build
+    name: Docker build and start (api + worker)
     runs-on: ubuntu-latest
     needs: [backend]
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: qa_lab
+          POSTGRES_PASSWORD: qa_lab_password
+          POSTGRES_DB: qa_lab
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U qa_lab -d qa_lab"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://qa_lab:qa_lab_password@postgres:5432/qa_lab?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_ACCESS_SECRET: test-access-secret-at-least-32-characters-long
+      JWT_REFRESH_SECRET: test-refresh-secret-at-least-32-characters-long
+      NODE_ENV: production
+      RUN_MODE: api
     steps:
       - uses: actions/checkout@v4
       - name: Build API image
-        run: docker build -f qa-lab-backend/Dockerfile -t qa-lab-api:ci .
+        run: docker build -f qa-lab-backend/Dockerfile --target api -t qa-lab-api:ci .
+      - name: Build Worker image
+        run: docker build -f qa-lab-backend/Dockerfile --target worker -t qa-lab-worker:ci .
+      - name: Start API container and assert /health/live
+        run: |
+          # Service containers publish to the job host; use host network so the
+          # app container can reach localhost:5432 / localhost:6379.
+          docker run -d --name qa-lab-api --network host \
+            -e DATABASE_URL="postgresql://qa_lab:qa_lab_password@127.0.0.1:5432/qa_lab?schema=public" \
+            -e REDIS_HOST=127.0.0.1 -e REDIS_PORT=6379 \
+            -e JWT_ACCESS_SECRET="$JWT_ACCESS_SECRET" \
+            -e JWT_REFRESH_SECRET="$JWT_REFRESH_SECRET" \
+            -e NODE_ENV=production -e RUN_MODE=api \
+            qa-lab-api:ci
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:3000/api/health/live; then
+              echo "API live OK"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API failed to become live"
+          docker logs qa-lab-api || true
+          exit 1
+      - name: Start Worker container and assert process stays alive 20s
+        run: |
+          docker run -d --name qa-lab-worker --network host \
+            -e DATABASE_URL="postgresql://qa_lab:qa_lab_password@127.0.0.1:5432/qa_lab?schema=public" \
+            -e REDIS_HOST=127.0.0.1 -e REDIS_PORT=6379 \
+            -e JWT_ACCESS_SECRET="$JWT_ACCESS_SECRET" \
+            -e JWT_REFRESH_SECRET="$JWT_REFRESH_SECRET" \
+            -e NODE_ENV=production -e RUN_MODE=worker \
+            qa-lab-worker:ci
+          sleep 20
+          if ! docker ps --filter name=qa-lab-worker --filter status=running | grep -q qa-lab-worker; then
+            echo "Worker not running after 20s"
+            docker logs qa-lab-worker || true
+            exit 1
+          fi
+          echo "Worker still alive after 20s"
+
+  trivy:
+    name: Trivy filesystem scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: CRITICAL,HIGH
+          exit-code: "0"
+          ignore-unfixed: true
+        # exit-code 0 while baseline is established; raise to 1 after triage
+
+  playwright-smoke:
+    name: Playwright smoke (web)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install
+        run: npm ci --legacy-peer-deps
+      - name: Build
+        run: npm run build
+      - name: Start server and curl smoke
+        run: |
+          npm run start -- --port 3001 &
+          for i in $(seq 1 40); do
+            if curl -sf http://127.0.0.1:3001/ >/dev/null; then
+              echo "web up"
+              curl -sf http://127.0.0.1:3001/ | head -c 300
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "web failed to start"
+          exit 1

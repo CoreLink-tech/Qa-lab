@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call -- Nest bootstrap Express types are loosely typed */
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -16,7 +17,15 @@ async function bootstrap() {
   });
 
   if (process.env.TRUST_PROXY === 'true' || process.env.TRUST_PROXY === '1') {
-    app.set('trust proxy', 1);
+    // Nest's INestApplication does not expose Express's app.set; use the
+    // underlying HTTP adapter (Express by default).
+    const httpAdapter = app.getHttpAdapter();
+    if (typeof httpAdapter?.getInstance === 'function') {
+      const instance = httpAdapter.getInstance();
+      if (instance && typeof instance.set === 'function') {
+        instance.set('trust proxy', 1);
+      }
+    }
   }
 
   app.use(helmet());

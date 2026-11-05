@@ -1,6 +1,7 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { IDOR_ROUTES } from '../../test-utils/idor-routes';
 import { OrganizationsService } from '../../organizations/organizations.service';
+import { WebsitesService } from '../../websites/websites.service';
 
 /**
  * Cross-tenant authorization matrix (service-level).
@@ -47,9 +48,6 @@ describe('IDOR matrix — membership boundary', () => {
 
 describe('IDOR matrix — website org isolation for API keys', () => {
   it('requireWebsiteInOrganization rejects foreign org', async () => {
-    const { WebsitesService } = await import(
-      '../../websites/websites.service'
-    );
     const prisma = {
       website: {
         findUnique: jest.fn().mockResolvedValue({
@@ -70,9 +68,6 @@ describe('IDOR matrix — website org isolation for API keys', () => {
   });
 
   it('requireWebsiteInOrganization allows same org', async () => {
-    const { WebsitesService } = await import(
-      '../../websites/websites.service'
-    );
     const website = {
       id: 'w1',
       project: { organizationId: 'org-a' },
@@ -93,9 +88,6 @@ describe('IDOR matrix — website org isolation for API keys', () => {
   });
 
   it('missing website is NotFound', async () => {
-    const { WebsitesService } = await import(
-      '../../websites/websites.service'
-    );
     const prisma = {
       website: { findUnique: jest.fn().mockResolvedValue(null) },
     };

@@ -10,14 +10,12 @@ import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../database/prisma.service';
 import { EmailService } from '../email/email.service';
-import {
-  OrganizationRole,
-  UserStatus,
-} from '../generated/prisma/client';
+import { OrganizationRole, UserStatus } from '../generated/prisma/client';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import type { AuthResponseDto } from './dto/auth-response.dto';
 import type { JwtPayload } from './strategies/jwt.strategy';
+import { TotpService } from './totp/totp.service';
 
 /** bcrypt cost 12 — deliberate CPU tradeoff vs brute-force resistance. */
 const BCRYPT_ROUNDS = 12;
@@ -35,6 +33,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly email: EmailService,
+    private readonly totp: TotpService,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResponseDto> {
@@ -50,8 +49,7 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
     const orgName =
-      dto.organizationName?.trim() ||
-      this.defaultOrgName(dto.firstName, email);
+      dto.organizationName?.trim() || this.defaultOrgName(dto.firstName, email);
     const orgSlug = await this.uniqueSlug(this.slugify(orgName));
     const verifyRaw = randomBytes(32).toString('base64url');
     const verifyHash = this.hashToken(verifyRaw);
@@ -85,7 +83,8 @@ export class AuthService {
       return { user, organization };
     });
 
-    const appUrl = this.config.get<string>('app.publicUrl') || 'http://localhost:3001';
+    const appUrl =
+      this.config.get<string>('app.publicUrl') || 'http://localhost:3001';
     await this.email.send({
       to: email,
       subject: 'Verify your QA Lab email',
@@ -143,9 +142,7 @@ export class AuthService {
     if (!passwordOk) {
       const failed = user.failedLoginCount + 1;
       const lockedUntil =
-        failed >= MAX_FAILED_LOGINS
-          ? new Date(Date.now() + LOCKOUT_MS)
-          : null;
+        failed >= MAX_FAILED_LOGINS ? new Date(Date.now() + LOCKOUT_MS) : null;
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
@@ -154,6 +151,18 @@ export class AuthService {
         },
       });
       throw new UnauthorizedException('Invalid email or password');
+    }
+
+    if (user.totpEnabled) {
+      const code = dto.totpCode?.trim();
+      if (!code) {
+        throw new UnauthorizedException('TOTP code required');
+      }
+      const secret = user.totpSecretEnc;
+      // Plain storage fallback until KMS encryption is wired; production must encrypt.
+      if (!secret || !this.totp.verify(secret, code)) {
+        throw new UnauthorizedException('Invalid TOTP code');
+      }
     }
 
     await this.prisma.user.update({
@@ -353,7 +362,8 @@ export class AuthService {
       },
     });
 
-    const appUrl = this.config.get<string>('app.publicUrl') || 'http://localhost:3001';
+    const appUrl =
+      this.config.get<string>('app.publicUrl') || 'http://localhost:3001';
     await this.email.send({
       to: email,
       subject: 'Reset your QA Lab password',
@@ -494,5 +504,54 @@ export class AuthService {
       candidate = `${base}-${randomBytes(2).toString('hex')}`;
     }
     return `${base}-${randomBytes(4).toString('hex')}`;
+  }
+
+  async beginTotpEnrollment(userId: string): Promise<{
+    secret: string;
+    otpauthUrl: string;
+    recoveryCodes: string[];
+  }> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException();
+    if (user.totpEnabled) {
+      throw new BadRequestException('TOTP already enabled');
+    }
+    const secret = this.totp.generateSecret();
+    const recoveryCodes = this.totp.generateRecoveryCodes(8);
+    const recoveryHashes = recoveryCodes.map((c) =>
+      createHash('sha256').update(c).digest('hex'),
+    );
+    // NOTE: encrypt totpSecretEnc with KMS in production; plaintext is a residual risk.
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        totpSecretEnc: secret,
+        totpRecoveryHashes: recoveryHashes,
+        totpEnabled: false,
+      },
+    });
+    return {
+      secret,
+      otpauthUrl: this.totp.buildOtpAuthUrl(secret, user.email),
+      recoveryCodes,
+    };
+  }
+
+  async confirmTotpEnrollment(
+    userId: string,
+    code: string,
+  ): Promise<{ enabled: true }> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user?.totpSecretEnc) {
+      throw new BadRequestException('Call /auth/totp/setup first');
+    }
+    if (!this.totp.verify(user.totpSecretEnc, code)) {
+      throw new UnauthorizedException('Invalid TOTP code');
+    }
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { totpEnabled: true },
+    });
+    return { enabled: true };
   }
 }

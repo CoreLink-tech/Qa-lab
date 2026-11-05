@@ -5,7 +5,10 @@ import { ApiKeysController } from './api-keys.controller';
 import { ApiKeysService } from './api-keys.service';
 
 @Module({
-  imports: [OrganizationsModule, forwardRef(() => AuthModule)],
+  imports: [
+    forwardRef(() => OrganizationsModule),
+    forwardRef(() => AuthModule),
+  ],
   controllers: [ApiKeysController],
   providers: [ApiKeysService],
   exports: [ApiKeysService],

@@ -400,3 +400,21 @@ The source code may not be copied, modified, distributed, or used commercially w
 Developed by **CoreLink Technologies**.
 
 Building next-generation tools for software quality assurance and developer productivity.
+
+
+---
+
+## Engineering status (honest)
+
+See `docs/KNOWN_LIMITATIONS.md` and `docs/ARCHITECTURE.md` for residual risk.
+
+- Phase 1 (green build / honest CI): delivered on branch `fix/02-green-ci` / PR #24
+- Phase 2 (proof tests / SSRF four points): branch `phase2/prove-claims` / PR #25
+- Phase 3+ (CSRF origin check, TOTP service, CSP tighten, prod compose, Dependabot groups): this tree
+
+Do not describe the product as “production-grade” until the Definition of Done in the engineering brief is met with green CI evidence.
+
+
+### Worker isolation
+
+Set `SCAN_ISOLATION=child` on worker processes to run each scan in a forked Node child that is killed on wall-clock timeout.

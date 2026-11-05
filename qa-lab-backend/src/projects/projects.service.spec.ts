@@ -13,10 +13,7 @@ describe('ProjectsService cross-tenant', () => {
     requireMembership: jest.fn(),
   };
 
-  const service = new ProjectsService(
-    prisma as never,
-    organizations as never,
-  );
+  const service = new ProjectsService(prisma as never, organizations as never);
 
   beforeEach(() => jest.clearAllMocks());
 

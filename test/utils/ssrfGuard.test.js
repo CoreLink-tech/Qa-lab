@@ -1,6 +1,6 @@
 "use strict";
 
-const { describe, it } = require("node:test");
+const { describe, it, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 const dns = require("dns");
 const {
@@ -53,10 +53,17 @@ describe("ssrfGuard", () => {
 
   describe("assertSafeScanUrl attack matrix", () => {
     it("accepts a normal public HTTPS URL", async () => {
-      const result = await assertSafeScanUrl("https://example.com/path");
-      assert.equal(result.hostname, "example.com");
-      assert.equal(result.protocol, "https:");
-      assert.ok(result.resolvedAddresses.length >= 1);
+      const original = dns.promises.lookup;
+      dns.promises.lookup = async () => [{ address: "93.184.216.34", family: 4 }];
+      try {
+        const result = await assertSafeScanUrl("https://example.com/path");
+        assert.equal(result.hostname, "example.com");
+        assert.equal(result.protocol, "https:");
+        assert.ok(result.resolvedAddresses.length >= 1);
+        assert.equal(result.resolvedAddresses[0], "93.184.216.34");
+      } finally {
+        dns.promises.lookup = original;
+      }
     });
 
     it("rejects non-http(s) schemes", async () => {
@@ -139,5 +146,79 @@ describe("ssrfGuard", () => {
         dns.promises.lookup = original;
       }
     });
+  });
+
+  describe("production ignores private-network bypass", () => {
+    const prevNodeEnv = process.env.NODE_ENV;
+    const prevFlag = process.env.QA_LAB_ALLOW_PRIVATE_NETWORK;
+
+    afterEach(() => {
+      process.env.NODE_ENV = prevNodeEnv;
+      if (prevFlag === undefined) delete process.env.QA_LAB_ALLOW_PRIVATE_NETWORK;
+      else process.env.QA_LAB_ALLOW_PRIVATE_NETWORK = prevFlag;
+    });
+
+    it("blocks 127.0.0.1 even with flag when NODE_ENV=production", async () => {
+      process.env.NODE_ENV = "production";
+      process.env.QA_LAB_ALLOW_PRIVATE_NETWORK = "1";
+      await assert.rejects(
+        () => assertSafeScanUrl("http://127.0.0.1/", { allowPrivateNetwork: true }),
+        /Blocked/,
+      );
+    });
+
+    it("blocks [::1] even with flag when NODE_ENV=production", async () => {
+      process.env.NODE_ENV = "production";
+      process.env.QA_LAB_ALLOW_PRIVATE_NETWORK = "1";
+      await assert.rejects(
+        () => assertSafeScanUrl("http://[::1]/", { allowPrivateNetwork: true }),
+        /Blocked/,
+      );
+    });
+
+    it("blocks 169.254.169.254 even with flag when NODE_ENV=production", async () => {
+      process.env.NODE_ENV = "production";
+      process.env.QA_LAB_ALLOW_PRIVATE_NETWORK = "1";
+      await assert.rejects(
+        () =>
+          assertSafeScanUrl("http://169.254.169.254/latest/meta-data/", {
+            allowPrivateNetwork: true,
+          }),
+        /Blocked/,
+      );
+    });
+  });
+
+});
+
+describe("DNS pinning / rebinding resistance", () => {
+  it("records resolved addresses used for pinning (public then would-be private is separate connect-time concern)", async () => {
+    const original = dns.promises.lookup;
+    let calls = 0;
+    dns.promises.lookup = async () => {
+      calls += 1;
+      // First resolution public — validation accepts and pins this set
+      return [{ address: "93.184.216.34", family: 4 }];
+    };
+    try {
+      const result = await assertSafeScanUrl("http://rebinding.example/");
+      assert.ok(result.resolvedAddresses.includes("93.184.216.34"));
+      assert.equal(calls, 1);
+    } finally {
+      dns.promises.lookup = original;
+    }
+  });
+
+  it("rejects when DNS returns only private", async () => {
+    const original = dns.promises.lookup;
+    dns.promises.lookup = async () => [{ address: "127.0.0.1", family: 4 }];
+    try {
+      await assert.rejects(
+        () => assertSafeScanUrl("http://evil.example/"),
+        /blocked address/i,
+      );
+    } finally {
+      dns.promises.lookup = original;
+    }
   });
 });

@@ -10,6 +10,10 @@ import { OrgConcurrencyLimiter } from './scans/org-concurrency.limiter';
 import { ScanReaperService } from './scans/scan-reaper.service';
 import { SchedulesModule } from './schedules/schedules.module';
 import { RetentionModule } from './retention/retention.module';
+import { QuotasModule } from './quotas/quotas.module';
+import { AuditModule } from './audit/audit.module';
+import { EmailModule } from './email/email.module';
+import { AuthModule } from './auth/auth.module';
 
 /**
  * Minimal module for the dedicated worker process.
@@ -27,6 +31,10 @@ import { RetentionModule } from './retention/retention.module';
     QueueModule,
     SchedulesModule,
     RetentionModule,
+    QuotasModule,
+    AuditModule,
+    EmailModule,
+    AuthModule,
   ],
   providers: [OrgConcurrencyLimiter, ScanProcessor, ScanReaperService],
 })

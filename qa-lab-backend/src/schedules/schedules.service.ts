@@ -1,12 +1,10 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  BadRequestException,
-  HttpException,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { OrganizationRole, ScanStatus, ScanTrigger } from '../generated/prisma/client';
+import {
+  OrganizationRole,
+  ScanStatus,
+  ScanTrigger,
+} from '../generated/prisma/client';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { WebsitesService } from '../websites/websites.service';
 import { ScanQueueService } from '../queue/scan-queue.service';
@@ -14,6 +12,7 @@ import { AuditService } from '../audit/audit.service';
 import { QuotasService } from '../quotas/quotas.service';
 import { DomainVerifyService } from '../domain-verify/domain-verify.service';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
+import { assertSafeExternalUrl } from '../common/security/assert-safe-url';
 
 @Injectable()
 export class SchedulesService {
@@ -42,6 +41,9 @@ export class SchedulesService {
     );
 
     await this.domainVerify.assertVerified(dto.websiteId);
+
+    // Re-validate stored URL at schedule create
+    await assertSafeExternalUrl(website.url);
 
     const intervalHours = dto.intervalHours ?? 24;
     await this.quotas.assertScheduleInterval(
@@ -106,9 +108,7 @@ export class SchedulesService {
       data: {
         enabled,
         nextRunAt: enabled
-          ? new Date(
-              Date.now() + schedule.intervalHours * 60 * 60 * 1000,
-            )
+          ? new Date(Date.now() + schedule.intervalHours * 60 * 60 * 1000)
           : null,
       },
     });

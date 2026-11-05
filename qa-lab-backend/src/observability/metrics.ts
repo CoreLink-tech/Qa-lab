@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call -- internal Counter/Histogram use Map; this is correctly typed at class level but eslint loses context on private fields */
 /**
  * Minimal in-process Prometheus text metrics (no extra dependency).
  * Multi-instance: each process exposes its own series; aggregate at scrape layer.
@@ -15,9 +16,7 @@ class Counter {
     const lines = [`# HELP ${name} ${help}`, `# TYPE ${name} counter`];
     for (const [key, val] of this.values) {
       const [method, status] = key.split('|');
-      lines.push(
-        `${name}{method="${method}",status="${status}"} ${val}`,
-      );
+      lines.push(`${name}{method="${method}",status="${status}"} ${val}`);
     }
     return lines.join('\n');
   }
@@ -46,9 +45,7 @@ class HistogramLite {
     let cumulative = 0;
     for (let i = 0; i < this.buckets.length; i++) {
       cumulative += this.counts[i];
-      lines.push(
-        `${name}_bucket{le="${this.buckets[i]}"} ${cumulative}`,
-      );
+      lines.push(`${name}_bucket{le="${this.buckets[i]}"} ${cumulative}`);
     }
     lines.push(`${name}_bucket{le="+Inf"} ${this.count}`);
     lines.push(`${name}_sum ${this.sum}`);
@@ -60,8 +57,18 @@ class HistogramLite {
 export const metrics = {
   httpRequests: new Counter(),
   httpDuration: new HistogramLite(),
-  scansCompleted: { value: 0, inc() { this.value += 1; } },
-  scansFailed: { value: 0, inc() { this.value += 1; } },
+  scansCompleted: {
+    value: 0,
+    inc() {
+      this.value += 1;
+    },
+  },
+  scansFailed: {
+    value: 0,
+    inc() {
+      this.value += 1;
+    },
+  },
 
   render(): string {
     return [

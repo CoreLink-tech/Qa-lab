@@ -97,7 +97,7 @@ export class DomainVerifyService {
         };
         const url = `https://${host}/.well-known/qa-lab-verification.txt`;
         const res = await safeGet(url, { timeoutMs: 10_000 });
-        const body = String(res.data || '').trim();
+        const body = (typeof res.data === 'string' ? res.data : '').trim();
         if (body.includes(token)) {
           ok = true;
           method = 'well_known';

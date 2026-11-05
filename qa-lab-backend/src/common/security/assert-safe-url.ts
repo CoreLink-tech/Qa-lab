@@ -12,10 +12,7 @@ export async function assertSafeExternalUrl(url: string): Promise<string> {
       ? join(process.env.QA_LAB_SCANNER_ROOT, '..', 'utils', 'ssrfGuard')
       : join(process.cwd(), '..', 'src', 'utils', 'ssrfGuard'),
   ) as {
-    assertSafeScanUrl: (
-      u: string,
-      o?: object,
-    ) => Promise<{ href: string }>;
+    assertSafeScanUrl: (u: string, o?: object) => Promise<{ href: string }>;
   };
 
   try {

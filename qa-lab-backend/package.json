@@ -16,7 +16,7 @@
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
     "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",
-    "test:cov": "jest --coverage --coverageThreshold='{}'",
+    "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prisma:generate": "node scripts/prisma-generate.js",
@@ -48,6 +48,7 @@
     "dotenv": "^17.4.2",
     "helmet": "^8.3.0",
     "ioredis": "^6.0.0",
+    "nodemailer": "^10.3.1",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pg": "^8.22.0",
@@ -100,16 +101,48 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "collectCoverageFrom": [
-      "src/**/*.ts",
-      "!src/generated/**",
-      "!src/main.ts",
-      "!src/main.worker.ts",
-      "!src/**/*.module.ts"
+      "**/*.ts",
+      "!generated/**",
+      "!main.ts",
+      "!main.worker.ts",
+      "!**/*.module.ts",
+      "!**/*.spec.ts",
+      "!**/*.controller.ts",
+      "!**/*.dto.ts",
+      "!**/observability/**",
+      "!**/common/**"
     ],
     "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "coverageThreshold": {
+      "global": {
+        "statements": 30,
+        "branches": 20,
+        "functions": 25,
+        "lines": 30
+      },
+      "./src/quotas/": {
+        "statements": 80,
+        "branches": 50,
+        "functions": 75,
+        "lines": 80
+      },
+      "./src/auth/totp/": {
+        "statements": 90,
+        "branches": 60,
+        "functions": 90,
+        "lines": 90
+      },
+      "./src/api-keys/": {
+        "statements": 50,
+        "branches": 40,
+        "functions": 40,
+        "lines": 50
+      }
+    }
   },
   "overrides": {
-    "js-yaml": "4.3.1"
+    "js-yaml": "4.3.2",
+    "multer": "2.5.0"
   }
 }

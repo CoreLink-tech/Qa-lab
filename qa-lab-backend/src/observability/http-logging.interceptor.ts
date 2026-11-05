@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access -- Nest ExecutionContext request is any in interceptor */
 import {
   CallHandler,
   ExecutionContext,
@@ -25,7 +26,7 @@ export class HttpLoggingInterceptor implements NestInterceptor {
           const ms = Date.now() - start;
           metrics.httpRequests.inc(req.method, res.statusCode || 200);
           metrics.httpDuration.observe(ms);
-          // eslint-disable-next-line no-console
+
           console.log(
             JSON.stringify({
               ts: new Date().toISOString(),
@@ -42,7 +43,7 @@ export class HttpLoggingInterceptor implements NestInterceptor {
         error: (err: Error) => {
           const ms = Date.now() - start;
           metrics.httpRequests.inc(req.method, 500);
-          // eslint-disable-next-line no-console
+
           console.log(
             JSON.stringify({
               ts: new Date().toISOString(),

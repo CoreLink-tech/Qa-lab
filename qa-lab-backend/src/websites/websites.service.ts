@@ -28,11 +28,11 @@ export class WebsitesService {
       dto.projectId,
     );
 
-    await this.organizations.requireMembership(
-      userId,
-      project.organizationId,
-      [OrganizationRole.OWNER, OrganizationRole.ADMIN, OrganizationRole.MEMBER],
-    );
+    await this.organizations.requireMembership(userId, project.organizationId, [
+      OrganizationRole.OWNER,
+      OrganizationRole.ADMIN,
+      OrganizationRole.MEMBER,
+    ]);
 
     await this.quotas.assertCanAddWebsite(project.organizationId);
     const url = await assertSafeExternalUrl(dto.url.trim());
@@ -142,8 +142,10 @@ export class WebsitesService {
     }
   }
 
-
-  async requireWebsiteInOrganization(organizationId: string, websiteId: string) {
+  async requireWebsiteInOrganization(
+    organizationId: string,
+    websiteId: string,
+  ) {
     const website = await this.prisma.website.findUnique({
       where: { id: websiteId },
       include: { project: true },

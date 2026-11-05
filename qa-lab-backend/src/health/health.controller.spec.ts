@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment -- test mock */
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   HealthCheckService,
@@ -31,16 +32,26 @@ describe('HealthController', () => {
         { provide: HealthCheckService, useValue: healthCheckService },
         {
           provide: MemoryHealthIndicator,
-          useValue: { checkHeap: jest.fn().mockResolvedValue({ memory_heap: { status: 'up' } }) },
+          useValue: {
+            checkHeap: jest
+              .fn()
+              .mockResolvedValue({ memory_heap: { status: 'up' } }),
+          },
         },
         {
           provide: PrismaHealthIndicator,
-          useValue: { pingCheck: jest.fn().mockResolvedValue({ database: { status: 'up' } }) },
+          useValue: {
+            pingCheck: jest
+              .fn()
+              .mockResolvedValue({ database: { status: 'up' } }),
+          },
         },
         { provide: PrismaService, useValue: {} },
         {
           provide: RedisHealthIndicator,
-          useValue: { pingCheck: jest.fn().mockResolvedValue({ redis: { status: 'up' } }) },
+          useValue: {
+            pingCheck: jest.fn().mockResolvedValue({ redis: { status: 'up' } }),
+          },
         },
         { provide: RedisService, useValue: {} },
       ],
@@ -64,18 +75,26 @@ describe('HealthController', () => {
         { provide: HealthCheckService, useValue: healthCheckService },
         {
           provide: MemoryHealthIndicator,
-          useValue: { checkHeap: jest.fn().mockResolvedValue({ memory_heap: { status: 'up' } }) },
+          useValue: {
+            checkHeap: jest
+              .fn()
+              .mockResolvedValue({ memory_heap: { status: 'up' } }),
+          },
         },
         {
           provide: PrismaHealthIndicator,
           useValue: {
-            pingCheck: jest.fn().mockResolvedValue({ database: { status: 'down', message: 'no connection' } }),
+            pingCheck: jest.fn().mockResolvedValue({
+              database: { status: 'down', message: 'no connection' },
+            }),
           },
         },
         { provide: PrismaService, useValue: {} },
         {
           provide: RedisHealthIndicator,
-          useValue: { pingCheck: jest.fn().mockResolvedValue({ redis: { status: 'up' } }) },
+          useValue: {
+            pingCheck: jest.fn().mockResolvedValue({ redis: { status: 'up' } }),
+          },
         },
         { provide: RedisService, useValue: {} },
       ],

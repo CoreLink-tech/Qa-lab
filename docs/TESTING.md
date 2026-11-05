@@ -7,7 +7,7 @@ cd qa-lab-backend && npm run test:cov
 ```
 
 Coverage gate (global, modest baseline to grow in CI):
-- statements ≥ 35%, branches ≥ 25%, functions ≥ 30%, lines ≥ 35%
+- statements ≥ 30%, branches ≥ 20%, functions ≥ 25%, lines ≥ 30% (enforced in `package.json` `coverageThreshold`; raise over time toward 80%)
 
 Exclusions: generated Prisma client, `main.ts` / `main.worker.ts`, Nest modules.
 
@@ -16,7 +16,14 @@ Exclusions: generated Prisma client, `main.ts` / `main.worker.ts`, Nest modules.
 - Tests: `src/auth/guards/idor.matrix.spec.ts` + service boundary tests
 
 ## Integration (CI)
-GitHub Actions `backend` job uses Postgres + Redis service containers, runs migrate + unit tests.
+GitHub Actions `backend` job uses Postgres + Redis service containers, runs migrate + unit tests + **e2e health** (`npm run test:e2e`).
+
+```bash
+cd qa-lab-backend && npm run test:e2e
+```
+
+E2E suites: `health.e2e-spec.ts` (live/ready/health), `auth.e2e-spec.ts` (register/login/me).
+
 
 ## Load smoke
 ```bash

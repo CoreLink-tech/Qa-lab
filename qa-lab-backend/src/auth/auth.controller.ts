@@ -50,10 +50,11 @@ export class AuthController {
     const secure =
       this.config.get<string>('cookie.secure') === 'true' ||
       this.config.get<string>('nodeEnv') === 'production';
+    const sameSite: 'none' | 'lax' = secure ? 'none' : 'lax';
     return {
       httpOnly: true,
       secure,
-      sameSite: (secure ? 'none' : 'lax') as 'none' | 'lax',
+      sameSite,
       path: '/api/auth',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     };
@@ -181,5 +182,27 @@ export class AuthController {
       dto.currentPassword,
       dto.newPassword,
     );
+  }
+  // --- TOTP enrollment (authenticated) ---
+
+  @Post('totp/setup')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Begin TOTP enrollment; returns otpauth URL + secret once',
+  })
+  async totpSetup(@CurrentUser() user: AuthenticatedUser) {
+    return this.authService.beginTotpEnrollment(user.id);
+  }
+
+  @Post('totp/confirm')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Confirm TOTP with a code; enables 2FA' })
+  async totpConfirm(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: { code: string },
+  ) {
+    return this.authService.confirmTotpEnrollment(user.id, body.code);
   }
 }

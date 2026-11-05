@@ -177,7 +177,6 @@ export class OrganizationsService {
     return membership;
   }
 
-
   async inviteMember(
     actorId: string,
     organizationId: string,
@@ -252,6 +251,8 @@ export class OrganizationsService {
       candidate = `${base}-${randomBytes(2).toString('hex')}`;
     }
     // Extremely unlikely fallback
-    throw new ConflictException('Unable to allocate a unique organization slug');
+    throw new ConflictException(
+      'Unable to allocate a unique organization slug',
+    );
   }
 }

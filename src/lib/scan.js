@@ -149,11 +149,15 @@ async function scan(request) {
   emit({ type: "started", message: `Starting scan of ${startUrl}` });
 
   try {
+    if (request.signal?.aborted) {
+      const err = new Error("Scan cancelled");
+      err.name = "AbortError";
+      throw err;
+    }
+
     // Load rules (plugins + built-ins). disabledRules / rules filter applied by registry if supported.
-    const rules = await loadRulesWithPlugins({
-      rulesDirs: request.rulesDirs || [],
-      // future: enabled/disabled filters
-    });
+    // loadRulesWithPlugins expects an array of plugin directories, not an options object
+    const rules = await loadRulesWithPlugins(request.rulesDirs || []);
 
     const websiteModel = createWebsiteModel(startUrl);
     const siteContext = { url: startUrl };
@@ -184,6 +188,7 @@ async function scan(request) {
       useSitemap: Boolean(request.useSitemap),
       includePatterns: request.includePatterns,
       excludePatterns: request.excludePatterns,
+      signal: request.signal,
       onPage: async (rawPage) => {
         if (request.signal?.aborted) {
           const err = new Error("Scan cancelled");

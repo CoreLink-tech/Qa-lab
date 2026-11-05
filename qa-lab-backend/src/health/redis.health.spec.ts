@@ -20,7 +20,9 @@ describe('RedisHealthIndicator', () => {
   });
 
   it('reports down with the error message when ping rejects', async () => {
-    const redis = fakeRedis(() => Promise.reject(new Error('connection refused')));
+    const redis = fakeRedis(() =>
+      Promise.reject(new Error('connection refused')),
+    );
     const result = await indicator.pingCheck('redis', redis);
     expect(result.redis.status).toBe('down');
     expect(result.redis.message).toMatch(/connection refused/);

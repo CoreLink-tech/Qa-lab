@@ -87,3 +87,35 @@ services:
 volumes:
   postgres_data:
   redis_data:
+
+  migrate:
+    build:
+      context: .
+      dockerfile: qa-lab-backend/Dockerfile
+      target: api
+    profiles: ["migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-qa_lab}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-qa_lab}?schema=public
+    entrypoint: ["npx", "prisma", "migrate", "deploy"]
+    restart: "no"
+
+  web:
+    image: node:22-alpine
+    working_dir: /app
+    restart: always
+    depends_on:
+      - api
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000/api}
+    # Build web image separately in CI; placeholder for compose topology
+    command: ["sh", "-c", "echo 'Build apps/web image and replace this service' && sleep infinity"]
+    ports:
+      - "3001:3001"
+
+# Postgres and Redis ports are intentionally not published to the host.
+volumes:
+  postgres_data:
+  redis_data:

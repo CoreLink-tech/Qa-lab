@@ -7,10 +7,10 @@ const { httpClient } = require("./utils/httpClient");
 // next). Used uniformly for every page at every crawl depth, not just
 // the seed URL -- BFS crawling needs link-extraction from every page,
 // not only the homepage.
-async function fetchPage(url) {
+async function fetchPage(url, options = {}) {
     try {
         const start = Date.now();
-        const response = await httpClient.get(url);
+        const response = await httpClient.get(url, { signal: options.signal });
         const responseTime = Date.now() - start;
 
         const $ = cheerio.load(response.data);

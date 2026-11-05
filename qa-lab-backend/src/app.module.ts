@@ -1,4 +1,4 @@
-import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -21,6 +21,7 @@ import { QuotasModule } from './quotas/quotas.module';
 import { DomainVerifyModule } from './domain-verify/domain-verify.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { RetentionModule } from './retention/retention.module';
+import { CsrfOriginMiddleware } from './common/csrf/csrf.middleware';
 import { RequestIdMiddleware } from './observability/request-id.middleware';
 import { HttpLoggingInterceptor } from './observability/http-logging.interceptor';
 import { ThrottlerRedisStorage } from './common/throttler-redis.storage';
@@ -77,6 +78,6 @@ import { ThrottlerRedisStorage } from './common/throttler-redis.storage';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(RequestIdMiddleware).forRoutes('*');
+    consumer.apply(RequestIdMiddleware, CsrfOriginMiddleware).forRoutes('*');
   }
 }

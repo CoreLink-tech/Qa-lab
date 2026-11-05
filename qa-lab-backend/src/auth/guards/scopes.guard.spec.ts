@@ -20,9 +20,9 @@ describe('ScopesGuard', () => {
 
   it('allows JWT users without checking scopes', () => {
     reflector.getAllAndOverride.mockReturnValue(['scans:write']);
-    expect(
-      guard.canActivate(ctx({ kind: 'user', id: 'u1', scopes: [] })),
-    ).toBe(true);
+    expect(guard.canActivate(ctx({ kind: 'user', id: 'u1', scopes: [] }))).toBe(
+      true,
+    );
   });
 
   it('blocks API keys missing scope', () => {

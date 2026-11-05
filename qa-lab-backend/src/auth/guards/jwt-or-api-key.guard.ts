@@ -8,10 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { ApiKeysService } from '../../api-keys/api-keys.service';
 import type { JwtPayload } from '../strategies/jwt.strategy';
-import {
-  toAuthenticatedUser,
-  type RequestPrincipal,
-} from '../types/principal';
+import { toAuthenticatedUser, type RequestPrincipal } from '../types/principal';
 
 /**
  * Accepts either:
@@ -67,9 +64,7 @@ export class JwtOrApiKeyGuard implements CanActivate {
         userId: key.createdById,
         apiKeyId: key.id,
         organizationId: key.organizationId,
-        scopes: Array.isArray(key.scopes)
-          ? (key.scopes as string[])
-          : [],
+        scopes: Array.isArray(key.scopes) ? key.scopes : [],
       };
       request.user = toAuthenticatedUser(principal);
       return true;

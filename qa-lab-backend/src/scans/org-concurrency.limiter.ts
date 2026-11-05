@@ -22,7 +22,9 @@ export class OrgConcurrencyLimiter implements OnModuleDestroy {
       lazyConnect: true,
     });
     void this.redis.connect().catch((err) => {
-      this.logger.warn(`Org concurrency Redis connect: ${err.message}`);
+      this.logger.warn(
+        `Org concurrency Redis connect: ${(err as Error).message}`,
+      );
     });
   }
 

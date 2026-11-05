@@ -7,6 +7,7 @@ import { PrismaService } from '../database/prisma.service';
 import { OrganizationRole, UserStatus } from '../generated/prisma/client';
 import { EmailService } from '../email/email.service';
 import { AuthService } from './auth.service';
+import { TotpService } from './totp/totp.service';
 
 jest.mock('bcryptjs', () => ({
   hash: jest.fn(),
@@ -19,6 +20,7 @@ describe('AuthService', () => {
     user: {
       findUnique: jest.Mock;
       create: jest.Mock;
+      update: jest.Mock;
     };
     organization: {
       create: jest.Mock;
@@ -71,6 +73,10 @@ describe('AuthService', () => {
         { provide: JwtService, useValue: jwt },
         { provide: EmailService, useValue: { send: jest.fn() } },
         {
+          provide: TotpService,
+          useValue: { verify: jest.fn().mockReturnValue(true) },
+        },
+        {
           provide: ConfigService,
           useValue: {
             get: (key: string) => {
@@ -91,7 +97,7 @@ describe('AuthService', () => {
   describe('register', () => {
     it('creates a user, organization, and returns tokens', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
-      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => {
+      prisma.$transaction.mockImplementation((fn: (tx: unknown) => unknown) => {
         const tx = {
           user: {
             create: jest.fn().mockResolvedValue({

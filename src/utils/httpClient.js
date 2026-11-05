@@ -30,6 +30,7 @@ httpClient.get = function safeClientGet(url, config = {}) {
     timeoutMs: config.timeout || REQUEST_TIMEOUT_MS,
     responseType: config.responseType,
     maxBodyBytes: config.maxContentLength,
+    signal: config.signal,
   });
 };
 
@@ -38,6 +39,7 @@ httpClient.post = function safeClientPost(url, data, config = {}) {
     headers: config.headers,
     timeoutMs: config.timeout || REQUEST_TIMEOUT_MS,
     responseType: config.responseType,
+    signal: config.signal,
   });
 };
 

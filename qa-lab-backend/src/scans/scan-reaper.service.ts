@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { ScanStatus } from '../generated/prisma/client';
 
@@ -13,8 +18,7 @@ export class ScanReaperService implements OnModuleInit, OnModuleDestroy {
   private readonly stuckMs: number;
 
   constructor(private readonly prisma: PrismaService) {
-    this.stuckMs =
-      Number(process.env.SCAN_STUCK_MS) || 20 * 60 * 1000; // 20 minutes
+    this.stuckMs = Number(process.env.SCAN_STUCK_MS) || 20 * 60 * 1000; // 20 minutes
   }
 
   onModuleInit(): void {

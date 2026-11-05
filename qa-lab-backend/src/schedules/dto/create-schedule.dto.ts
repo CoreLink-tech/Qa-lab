@@ -13,7 +13,10 @@ export class CreateScheduleDto {
   @IsUUID()
   websiteId!: string;
 
-  @ApiPropertyOptional({ default: 24, description: 'Hours between scans (1–168)' })
+  @ApiPropertyOptional({
+    default: 24,
+    description: 'Hours between scans (1–168)',
+  })
   @IsOptional()
   @IsInt()
   @Min(1)

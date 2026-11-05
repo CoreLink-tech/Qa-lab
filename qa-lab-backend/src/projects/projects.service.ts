@@ -18,11 +18,11 @@ export class ProjectsService {
   ) {}
 
   async create(userId: string, dto: CreateProjectDto) {
-    await this.organizations.requireMembership(
-      userId,
-      dto.organizationId,
-      [OrganizationRole.OWNER, OrganizationRole.ADMIN, OrganizationRole.MEMBER],
-    );
+    await this.organizations.requireMembership(userId, dto.organizationId, [
+      OrganizationRole.OWNER,
+      OrganizationRole.ADMIN,
+      OrganizationRole.MEMBER,
+    ]);
 
     const name = dto.name.trim();
     const baseSlug = dto.slug?.trim() || this.slugify(name);
@@ -80,10 +80,7 @@ export class ProjectsService {
       throw new NotFoundException('Project not found');
     }
 
-    await this.organizations.requireMembership(
-      userId,
-      project.organizationId,
-    );
+    await this.organizations.requireMembership(userId, project.organizationId);
 
     return {
       ...this.toSummary(project),
@@ -101,11 +98,11 @@ export class ProjectsService {
       throw new NotFoundException('Project not found');
     }
 
-    await this.organizations.requireMembership(
-      userId,
-      project.organizationId,
-      [OrganizationRole.OWNER, OrganizationRole.ADMIN, OrganizationRole.MEMBER],
-    );
+    await this.organizations.requireMembership(userId, project.organizationId, [
+      OrganizationRole.OWNER,
+      OrganizationRole.ADMIN,
+      OrganizationRole.MEMBER,
+    ]);
 
     const updated = await this.prisma.project.update({
       where: { id: projectId },
@@ -127,10 +124,7 @@ export class ProjectsService {
     if (!project) {
       throw new NotFoundException('Project not found');
     }
-    await this.organizations.requireMembership(
-      userId,
-      project.organizationId,
-    );
+    await this.organizations.requireMembership(userId, project.organizationId);
     return project;
   }
 
