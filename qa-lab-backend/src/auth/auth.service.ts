@@ -505,4 +505,53 @@ export class AuthService {
     }
     return `${base}-${randomBytes(4).toString('hex')}`;
   }
+
+  async beginTotpEnrollment(userId: string): Promise<{
+    secret: string;
+    otpauthUrl: string;
+    recoveryCodes: string[];
+  }> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException();
+    if (user.totpEnabled) {
+      throw new BadRequestException('TOTP already enabled');
+    }
+    const secret = this.totp.generateSecret();
+    const recoveryCodes = this.totp.generateRecoveryCodes(8);
+    const recoveryHashes = recoveryCodes.map((c) =>
+      createHash('sha256').update(c).digest('hex'),
+    );
+    // NOTE: encrypt totpSecretEnc with KMS in production; plaintext is a residual risk.
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        totpSecretEnc: secret,
+        totpRecoveryHashes: recoveryHashes,
+        totpEnabled: false,
+      },
+    });
+    return {
+      secret,
+      otpauthUrl: this.totp.buildOtpAuthUrl(secret, user.email),
+      recoveryCodes,
+    };
+  }
+
+  async confirmTotpEnrollment(
+    userId: string,
+    code: string,
+  ): Promise<{ enabled: true }> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user?.totpSecretEnc) {
+      throw new BadRequestException('Call /auth/totp/setup first');
+    }
+    if (!this.totp.verify(user.totpSecretEnc, code)) {
+      throw new UnauthorizedException('Invalid TOTP code');
+    }
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { totpEnabled: true },
+    });
+    return { enabled: true };
+  }
 }

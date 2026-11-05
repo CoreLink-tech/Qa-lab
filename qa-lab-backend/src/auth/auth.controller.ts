@@ -183,4 +183,26 @@ export class AuthController {
       dto.newPassword,
     );
   }
+  // --- TOTP enrollment (authenticated) ---
+
+  @Post('totp/setup')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Begin TOTP enrollment; returns otpauth URL + secret once',
+  })
+  async totpSetup(@CurrentUser() user: AuthenticatedUser) {
+    return this.authService.beginTotpEnrollment(user.id);
+  }
+
+  @Post('totp/confirm')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Confirm TOTP with a code; enables 2FA' })
+  async totpConfirm(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: { code: string },
+  ) {
+    return this.authService.confirmTotpEnrollment(user.id, body.code);
+  }
 }
