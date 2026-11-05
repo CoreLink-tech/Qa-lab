@@ -25,6 +25,8 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci
+      - name: Lint scanner
+        run: npm run lint
       - name: Test
         run: npm test
         timeout-minutes: 5
@@ -121,6 +123,8 @@ jobs:
         run: npm run typecheck
       - name: Build
         run: npm run build
+      - name: Unit tests
+        run: npm test
       - name: Audit (high+ with documented exception)
         # postcss via next@15 is a known exception (docs/AUDIT_EXCEPTIONS.md, expires 2026-12-15)
         # Root and backend stay at --audit-level=high with zero high vulns.

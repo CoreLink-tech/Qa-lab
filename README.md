@@ -7,6 +7,22 @@
 
 **QA Lab** is a modular website quality-assurance and security-scanning platform. It crawls sites, evaluates performance, SEO, accessibility, forms, links, and security headers, and produces scored HTML/JSON reports. A NestJS API, BullMQ worker, and Next.js dashboard support multi-tenant operation.
 
+
+### Verify from a fresh clone
+
+```bash
+git clone https://github.com/CoreLink-tech/Qa-lab.git
+cd Qa-lab
+npm ci                          # scanner + lockfile
+npm run lint                    # scanner ESLint
+npm test                        # scanner unit tests (explicit)
+
+cd qa-lab-backend && npm ci && npm run lint && npm test && npm run build
+cd ../apps/web && npm ci --legacy-peer-deps && npm test && npm run build
+```
+
+CI runs these same install / lint / test / build steps on every push to `main`.
+
 ## Problem
 
 Teams need repeatable website QA beyond one-off Lighthouse runs: link integrity, form and header checks, accessibility signals, and a path to scheduled multi-tenant scanning with clear tenancy boundaries. QA Lab combines a focused scanner library with an API and worker suitable for productization.
