@@ -144,5 +144,8 @@
   "overrides": {
     "js-yaml": "4.3.2",
     "multer": "2.5.0"
+  },
+  "optionalDependencies": {
+    "@sentry/node": "^8.0.0"
   }
 }

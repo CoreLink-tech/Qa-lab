@@ -11,6 +11,7 @@ import { type ScanJobPayload } from '../queue/queue.constants';
 import { ScanQueueService } from '../queue/scan-queue.service';
 import { WebsitesService } from '../websites/websites.service';
 import { assertSafeExternalUrl } from '../common/security/assert-safe-url';
+import { captureException } from '../observability/error-tracking';
 import { QuotasService } from '../quotas/quotas.service';
 import { DomainVerifyService } from '../domain-verify/domain-verify.service';
 import { CreateScanDto } from './dto/create-scan.dto';
@@ -84,8 +85,13 @@ export class ScansService {
       await this.scanQueue.enqueue({ scanId: scan.id });
     } catch (error) {
       this.logger.error(
-        `Failed to enqueue scan ${scan.id}: ${(error as Error).message}`,
+        JSON.stringify({
+          msg: 'scan_enqueue_failed',
+          scanId: scan.id,
+          error: (error as Error).message,
+        }),
       );
+      captureException(error, { scanId: scan.id });
       await this.prisma.scan.update({
         where: { id: scan.id },
         data: {
@@ -154,8 +160,13 @@ export class ScansService {
       await this.scanQueue.enqueue(payload);
     } catch (error) {
       this.logger.error(
-        `Failed to enqueue scan ${scan.id}: ${(error as Error).message}`,
+        JSON.stringify({
+          msg: 'scan_enqueue_failed',
+          scanId: scan.id,
+          error: (error as Error).message,
+        }),
       );
+      captureException(error, { scanId: scan.id });
       await this.prisma.scan.update({
         where: { id: scan.id },
         data: {

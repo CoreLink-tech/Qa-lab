@@ -12,6 +12,7 @@ import { SCAN_QUEUE_NAME, type ScanJobPayload } from '../queue/queue.constants';
 import { getScannerLibrary } from './scanner-bridge';
 import { OrgConcurrencyLimiter } from './org-concurrency.limiter';
 import { metrics } from '../observability/metrics';
+import { captureException } from '../observability/error-tracking';
 import { assertSafeExternalUrl } from '../common/security/assert-safe-url';
 import { runScanInChild } from './scan-child-runner';
 
@@ -67,9 +68,14 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
 
     this.worker.on('failed', (job, err) => {
       this.logger.error(
-        `Scan job ${job?.id} failed: ${err.message}`,
-        err.stack,
+        JSON.stringify({
+          msg: 'scan_job_failed',
+          jobId: job?.id,
+          scanId: job?.data?.scanId,
+          error: err.message,
+        }),
       );
+      captureException(err, { jobId: job?.id, scanId: job?.data?.scanId });
     });
 
     this.worker.on('completed', (job) => {
