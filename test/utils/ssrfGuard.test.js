@@ -190,3 +190,35 @@ describe("ssrfGuard", () => {
   });
 
 });
+
+describe("DNS pinning / rebinding resistance", () => {
+  it("records resolved addresses used for pinning (public then would-be private is separate connect-time concern)", async () => {
+    const original = dns.promises.lookup;
+    let calls = 0;
+    dns.promises.lookup = async () => {
+      calls += 1;
+      // First resolution public — validation accepts and pins this set
+      return [{ address: "93.184.216.34", family: 4 }];
+    };
+    try {
+      const result = await assertSafeScanUrl("http://rebinding.example/");
+      assert.ok(result.resolvedAddresses.includes("93.184.216.34"));
+      assert.equal(calls, 1);
+    } finally {
+      dns.promises.lookup = original;
+    }
+  });
+
+  it("rejects when DNS returns only private", async () => {
+    const original = dns.promises.lookup;
+    dns.promises.lookup = async () => [{ address: "127.0.0.1", family: 4 }];
+    try {
+      await assert.rejects(
+        () => assertSafeScanUrl("http://evil.example/"),
+        /blocked address/i,
+      );
+    } finally {
+      dns.promises.lookup = original;
+    }
+  });
+});
