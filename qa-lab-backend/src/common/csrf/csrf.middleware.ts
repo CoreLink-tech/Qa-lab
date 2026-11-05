@@ -72,7 +72,10 @@ export class CsrfOriginMiddleware implements NestMiddleware {
     try {
       return new URL(o).origin;
     } catch {
-      return o.replace(/\/+$/, '');
+      // Strip trailing slashes without regex (CodeQL polynomial-regex rule).
+      let end = o.length;
+      while (end > 0 && o.charCodeAt(end - 1) === 47 /* / */) end -= 1;
+      return o.slice(0, end);
     }
   }
 }

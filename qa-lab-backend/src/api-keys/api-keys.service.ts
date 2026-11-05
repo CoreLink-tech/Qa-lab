@@ -10,9 +10,14 @@ import { OrganizationsService } from '../organizations/organizations.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateApiKeyDto } from './dto/create-api-key.dto';
 
-/** Digest for high-entropy API tokens (not user passwords). */
+/**
+ * Digest for high-entropy API tokens (not user passwords).
+ * Random 24-byte tokens have ~192 bits of entropy; adaptive password
+ * hashes (bcrypt/scrypt) add latency without meaningful security gain.
+ * CodeQL js/insufficient-password-hash does not apply to API key material.
+ */
+// codeql[js/insufficient-password-hash]: API keys are high-entropy random tokens, not passwords
 function hashApiKeyMaterial(rawKey: string): string {
-  // HMAC-SHA256 over random API tokens — not a password-hashing scheme.
   const pepper =
     process.env.API_KEY_PEPPER ||
     process.env.JWT_ACCESS_SECRET ||

@@ -148,16 +148,26 @@ export class ProjectsService {
     };
   }
 
+  /** Linear-time slugify (avoids polynomial regex on user input). */
   private slugify(input: string): string {
-    return (
-      input
-        .toLowerCase()
-        .trim()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+/, '')
-        .replace(/-+$/, '')
-        .slice(0, 60) || 'project'
-    );
+    const s = (input || '').toLowerCase().trim();
+    const out: string[] = [];
+    let prevDash = false;
+    for (let i = 0; i < s.length && out.length < 60; i++) {
+      const c = s.charCodeAt(i);
+      const isAlnum =
+        (c >= 97 && c <= 122) || // a-z
+        (c >= 48 && c <= 57); // 0-9
+      if (isAlnum) {
+        out.push(s[i]);
+        prevDash = false;
+      } else if (!prevDash && out.length > 0) {
+        out.push('-');
+        prevDash = true;
+      }
+    }
+    while (out.length && out[out.length - 1] === '-') out.pop();
+    return out.join('') || 'project';
   }
 
   private async uniqueSlug(
