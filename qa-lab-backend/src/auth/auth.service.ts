@@ -15,6 +15,7 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import type { AuthResponseDto } from './dto/auth-response.dto';
 import type { JwtPayload } from './strategies/jwt.strategy';
+import { TotpService } from './totp/totp.service';
 
 /** bcrypt cost 12 — deliberate CPU tradeoff vs brute-force resistance. */
 const BCRYPT_ROUNDS = 12;
@@ -32,6 +33,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly email: EmailService,
+    private readonly totp: TotpService,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResponseDto> {
@@ -149,6 +151,18 @@ export class AuthService {
         },
       });
       throw new UnauthorizedException('Invalid email or password');
+    }
+
+    if (user.totpEnabled) {
+      const code = dto.totpCode?.trim();
+      if (!code) {
+        throw new UnauthorizedException('TOTP code required');
+      }
+      const secret = user.totpSecretEnc;
+      // Plain storage fallback until KMS encryption is wired; production must encrypt.
+      if (!secret || !this.totp.verify(secret, code)) {
+        throw new UnauthorizedException('Invalid TOTP code');
+      }
     }
 
     await this.prisma.user.update({

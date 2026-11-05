@@ -413,3 +413,8 @@ See `docs/KNOWN_LIMITATIONS.md` and `docs/ARCHITECTURE.md` for residual risk.
 - Phase 3+ (CSRF origin check, TOTP service, CSP tighten, prod compose, Dependabot groups): this tree
 
 Do not describe the product as “production-grade” until the Definition of Done in the engineering brief is met with green CI evidence.
+
+
+### Worker isolation
+
+Set `SCAN_ISOLATION=child` on worker processes to run each scan in a forked Node child that is killed on wall-clock timeout.

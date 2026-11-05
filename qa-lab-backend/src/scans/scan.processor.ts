@@ -13,6 +13,7 @@ import { getScannerLibrary } from './scanner-bridge';
 import { OrgConcurrencyLimiter } from './org-concurrency.limiter';
 import { metrics } from '../observability/metrics';
 import { assertSafeExternalUrl } from '../common/security/assert-safe-url';
+import { runScanInChild } from './scan-child-runner';
 
 const DEFAULT_SCAN_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes wall clock
 const DEFAULT_MAX_PAGES = 50;
@@ -146,11 +147,26 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
       // Final SSRF check immediately before outbound fetch
       await assertSafeExternalUrl(scan.website.url);
 
-      const { scan: runScan } = getScannerLibrary();
-
+      const useChild =
+        (process.env.SCAN_ISOLATION || '').toLowerCase() === 'child';
       const controller = new AbortController();
-      const result = await this.withTimeout(
-        runScan({
+      let result: {
+        status: string;
+        pagesScanned?: number;
+        error?: string;
+        overallScore?: number;
+        grade?: string;
+        findings?: unknown[];
+        recommendations?: unknown[];
+        summary?: Record<string, unknown>;
+        scanId?: string;
+        startUrl?: string;
+        startedAt?: string;
+        completedAt?: string;
+      };
+
+      if (useChild) {
+        result = await runScanInChild({
           startUrl: scan.website.url,
           scanId,
           maxPages,
@@ -159,23 +175,38 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
           respectRobotsTxt: (options.respectRobotsTxt as boolean) ?? true,
           checkExposedPaths: (options.checkExposedPaths as boolean) ?? false,
           checkAssets: (options.checkAssets as boolean) ?? false,
-          writeReports: false,
-          signal: controller.signal,
-          onProgress: (event: { type?: string; pagesScanned?: number }) => {
-            if (event.type === 'page' && event.pagesScanned != null) {
-              void this.prisma.scan
-                .update({
-                  where: { id: scanId },
-                  data: { pagesScanned: event.pagesScanned },
-                })
-                .catch(() => undefined);
-            }
-          },
-        }),
-        this.scanTimeoutMs,
-        scanId,
-        controller,
-      );
+          timeoutMs: this.scanTimeoutMs,
+        });
+      } else {
+        const { scan: runScan } = getScannerLibrary();
+        result = await this.withTimeout(
+          runScan({
+            startUrl: scan.website.url,
+            scanId,
+            maxPages,
+            maxDepth: (options.maxDepth as number) ?? 2,
+            concurrency: (options.concurrency as number) ?? 5,
+            respectRobotsTxt: (options.respectRobotsTxt as boolean) ?? true,
+            checkExposedPaths: (options.checkExposedPaths as boolean) ?? false,
+            checkAssets: (options.checkAssets as boolean) ?? false,
+            writeReports: false,
+            signal: controller.signal,
+            onProgress: (event: { type?: string; pagesScanned?: number }) => {
+              if (event.type === 'page' && event.pagesScanned != null) {
+                void this.prisma.scan
+                  .update({
+                    where: { id: scanId },
+                    data: { pagesScanned: event.pagesScanned },
+                  })
+                  .catch(() => undefined);
+              }
+            },
+          }),
+          this.scanTimeoutMs,
+          scanId,
+          controller,
+        );
+      }
 
       const current = await this.prisma.scan.findUnique({
         where: { id: scanId },
@@ -254,7 +285,7 @@ export class ScanProcessor implements OnModuleInit, OnModuleDestroy {
       ]);
 
       this.logger.log(
-        `Scan ${scanId} completed — score ${result.overallScore} (${result.grade}), ${findings.length} findings`,
+        `Scan ${scanId} completed — score ${String(result.overallScore)} (${String(result.grade)}), ${findings.length} findings`,
       );
     } catch (error) {
       const message = (error as Error).message || String(error);

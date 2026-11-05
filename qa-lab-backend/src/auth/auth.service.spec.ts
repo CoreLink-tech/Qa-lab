@@ -7,6 +7,7 @@ import { PrismaService } from '../database/prisma.service';
 import { OrganizationRole, UserStatus } from '../generated/prisma/client';
 import { EmailService } from '../email/email.service';
 import { AuthService } from './auth.service';
+import { TotpService } from './totp/totp.service';
 
 jest.mock('bcryptjs', () => ({
   hash: jest.fn(),
@@ -71,6 +72,10 @@ describe('AuthService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: JwtService, useValue: jwt },
         { provide: EmailService, useValue: { send: jest.fn() } },
+        {
+          provide: TotpService,
+          useValue: { verify: jest.fn().mockReturnValue(true) },
+        },
         {
           provide: ConfigService,
           useValue: {

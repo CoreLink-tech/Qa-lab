@@ -58,6 +58,11 @@ model User {
   emailVerifyTokenHash String?
   emailVerifyExpiresAt DateTime?
 
+  /// TOTP 2FA (RFC 6238). Secret must be stored encrypted at rest by the app layer.
+  totpEnabled          Boolean  @default(false)
+  totpSecretEnc        String?
+  totpRecoveryHashes   String[] @default([])
+
   memberships     OrganizationMember[]
   refreshTokens   RefreshToken[]
   passwordResets  PasswordResetToken[]
