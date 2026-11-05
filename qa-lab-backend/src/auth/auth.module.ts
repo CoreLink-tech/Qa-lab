@@ -8,6 +8,7 @@ import { AuthService } from './auth.service';
 import { JwtOrApiKeyGuard } from './guards/jwt-or-api-key.guard';
 import { ScopesGuard } from './guards/scopes.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { TotpService } from './totp/totp.service';
 
 @Module({
   imports: [
@@ -25,13 +26,20 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     forwardRef(() => ApiKeysModule),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, JwtOrApiKeyGuard, ScopesGuard],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    JwtOrApiKeyGuard,
+    ScopesGuard,
+    TotpService,
+  ],
   exports: [
     AuthService,
     JwtModule,
     PassportModule,
     JwtOrApiKeyGuard,
     ScopesGuard,
+    TotpService,
   ],
 })
 export class AuthModule {}

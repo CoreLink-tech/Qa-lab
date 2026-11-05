@@ -33,7 +33,7 @@ const securityHeaders = [
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
       // Next.js requires inline scripts/styles in many setups; tighten when moving to nonces
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
       `connect-src ${connectSrc}`,
       "form-action 'self'",

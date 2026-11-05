@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access -- unit mocks */
 import { BadRequestException } from '@nestjs/common';
 
 jest.mock('../common/security/assert-safe-url', () => ({

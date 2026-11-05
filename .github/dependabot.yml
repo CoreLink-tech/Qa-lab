@@ -5,17 +5,54 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      root-production:
+        dependency-type: production
+        update-types:
+          - "patch"
+          - "minor"
+      root-dev:
+        dependency-type: development
+        update-types:
+          - "patch"
+          - "minor"
   - package-ecosystem: npm
     directory: "/qa-lab-backend"
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      backend-production:
+        dependency-type: production
+        update-types:
+          - "patch"
+          - "minor"
+      backend-dev:
+        dependency-type: development
+        update-types:
+          - "patch"
+          - "minor"
   - package-ecosystem: npm
     directory: "/apps/web"
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      web-production:
+        dependency-type: production
+        update-types:
+          - "patch"
+          - "minor"
+      web-dev:
+        dependency-type: development
+        update-types:
+          - "patch"
+          - "minor"
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+    groups:
+      actions:
+        patterns:
+          - "*"
