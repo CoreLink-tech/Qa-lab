@@ -28,7 +28,7 @@
     "start:api:dev": "RUN_MODE=api nest start --watch"
   },
   "dependencies": {
-    "@nestjs/common": "^11.0.1",
+    "@nestjs/common": "^12.3.2",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",
     "@nestjs/jwt": "^11.0.0",
