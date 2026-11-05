@@ -8,9 +8,9 @@
   },
   "scripts": {
     "start": "node src/index.js",
-    "test": "node --test $(find test -name '*.test.js' | sort)",
+    "test": "node scripts/run-scanner-tests.js",
     "test:scanner": "node --test $(find test -name '*.test.js' | sort)",
-    "lint": "echo \"No root linter configured yet \u2013 scanner is CommonJS; backend has its own eslint\"",
+    "lint": "eslint \"src/**/*.js\" \"test/**/*.js\"",
     "build": "echo \"Scanner is pure JS \u2013 no build step required\"",
     "dev": "node src/index.js",
     "docker:up": "docker compose up -d",
@@ -23,7 +23,9 @@
     "web:dev": "npm run dev --prefix apps/web",
     "web:build": "npm run build --prefix apps/web",
     "backend:migrate": "npm exec --prefix qa-lab-backend -- prisma migrate deploy",
-    "setup": "npm run docker:up && npm run backend:install && npm run backend:migrate && npm run web:install"
+    "setup": "npm run docker:up && npm run backend:install && npm run backend:migrate && npm run web:install",
+    "format": "prettier --check \"src/**/*.js\" \"test/**/*.js\"",
+    "format:write": "prettier --write \"src/**/*.js\" \"test/**/*.js\""
   },
   "keywords": [
     "qa",
@@ -56,5 +58,9 @@
   "bugs": {
     "url": "https://github.com/CoreLink-tech/Qa-lab/issues"
   },
-  "homepage": "https://github.com/CoreLink-tech/Qa-lab#readme"
+  "homepage": "https://github.com/CoreLink-tech/Qa-lab#readme",
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "prettier": "^3.4.0"
+  }
 }
