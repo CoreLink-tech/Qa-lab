@@ -100,10 +100,10 @@ describe('HealthController', () => {
       ],
     }).compile();
 
-    const brokenController = module.get(HealthController);
-    const result = (await brokenController.check()) as {
+    const brokenController = module.get<HealthController>(HealthController);
+    const result: {
       details: { database: { status: string; message?: string } };
-    };
+    } = await brokenController.check();
     expect(result.details.database.status).toBe('down');
     expect(result.details.database.message).toBe('no connection');
   });
