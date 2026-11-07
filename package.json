@@ -60,7 +60,7 @@
   },
   "homepage": "https://github.com/CoreLink-tech/Qa-lab#readme",
   "devDependencies": {
-    "eslint": "^8.57.0",
+    "eslint": "^10.14.0",
     "prettier": "^3.4.0"
   }
 }
